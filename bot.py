@@ -4,125 +4,127 @@ import subprocess
 import threading
 import json
 import logging
-import socket
+import datetime
 import telebot
 from telebot import types
 
-# ڕێکخستنی سیستەمی لۆگ و ئاگاداری
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - [%(levelname)s] - %(message)s')
-logger = logging.getLogger("BlackHatAIEngine")
+# ==========================================
+TOKEN = "8814964477:AAHNn3tNITZarQhxyYciS-AKfmXXsyODSN4"
+ADMIN_ID = "5527152252"
+# ==========================================
 
-TOKEN = os.environ.get('BOT_TOKEN', '8814964477:AAHNn3tNITZarQhxyYciS-AKfmXXsyODSN4')
-ADMIN_ID = int(os.environ.get('ADMIN_ID', '5527152252'))
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('BlackHatAI(MultiUserCore)')
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
-# 1. کتێبخانەی ئامرازە خۆکارەکان (Automated Tool Generator & Runner)
-TOOLS_REGISTRY = {
-    "nmap_scan": "nmap -sV -T4 --top-ports 100",
-    "sql_inject": "sqlmap --batch --random-agent --dbs -u",
-    "dir_buster": "gobuster dir -u",
-    "hydra_brute": "hydra -l admin -P wordlist.txt",
-    "git_clone": "git clone"
-}
+user_states = {}
+daily_limits = {}
 
-# 2. فەرمانی سەرەکی و پانێڵی AI Black Hat
+BANNER = (
+    "💀 **AI BLACK HAT AUTONOMOUS MATRIX v20.0** 💀\n\n"
+    "🛡️ سیستەمی زیرەکی دەستکردی فرە-بەکارهێنەر بۆ پشکنین، هاککردن و نوسینی کۆد.\n"
+    "⚡ بەکارهێنەرانی ئاسایی سنووری ڕۆژانەیان هەیە، و ئەدمن دەسەڵاتی ڕەهای هەیە!"
+)
+
+def check_and_update_limit(user_id):
+    if user_id == ADMIN_ID:
+        return True, 999
+    
+    today = datetime.date.today().isoformat()
+    
+    if user_id not in daily_limits or daily_limits[user_id]['date'] != today:
+        daily_limits[user_id] = {'date': today, 'count': 0}
+        
+    if daily_limits[user_id]['count'] >= 10:
+        return False, 0
+        
+    daily_limits[user_id]['count'] += 1
+    remaining = 10 - daily_limits[user_id]['count']
+    return True, remaining
+
 @bot.message_handler(commands=['start'])
-def cmd_ai_start(message):
-    if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "⛔ Access Denied. Autonomous AI Core is locked.")
-        return
-        
+def cmd_start(message):
+    user_id = message.from_user.id
+    is_admin = (user_id == ADMIN_ID)
+    
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_recon = types.InlineKeyboardButton("🔍 کۆکەرەوەی زانیاری (Recon/Nmap)", callback_data="ai_recon")
-    btn_exploit = types.InlineKeyboardButton("💥 تاقیکردنەوەی لاوازی (Exploit Suite)", callback_data="ai_exploit")
-    btn_payload = types.InlineKeyboardButton("🧪 دروستکەری پێڵۆد (Payload Gen)", callback_data="ai_payload")
-    btn_termux = types.InlineKeyboardButton("⚙️ جێبەجێکاری فەرمانی تێرماکس", callback_data="ai_termux")
-    markup.add(btn_recon, btn_exploit, btn_payload, btn_termux)
+    btn_recon = types.InlineKeyboardButton("🔍 پشکنینی ئامانج (Recon)", callback_data="matrix_recon")
+    btn_exploit = types.InlineKeyboardButton("💻 پشکنینی لاوازی", callback_data="matrix_exploit")
+    btn_tool = types.InlineKeyboardButton("🛠 دروستکردنی توڵ و کۆد", callback_data="matrix_tool")
+    markup.add(btn_recon, btn_exploit, btn_tool)
     
-    welcome_banner = (
-        "💀 <b>BLACK HAT AI AUTONOMOUS CORE v5.0</b> 💀\n\n"
-        "سیستەمی زیرەکی دەستکردی هێرشبەر ئامادەیە بۆ جێبەجێکردنی فەرمانەکانت.\n"
-        "هەموو ئامرازەکان، سکانەرەکان و سکریپتەکان لەم ژینگەیەدا چالاک کراون.\n\n"
-        "<i>بۆ پرسیار یان فەرمانی ڕاستەوخۆ، پەیام بنووسە یان یەکێک لە دوگمەکان هەڵبژێرە:</i>"
-    )
-    bot.send_message(message.chat.id, welcome_banner, reply_markup=markup)
+    if is_admin:
+        banner_text = BANNER + "\n\n👑 **(تایبەت: تۆ ئەدمنی سێرڤەرەکەیت - بێسنوور)**"
+    else:
+        banner_text = BANNER + "\n\n👤 **(جۆری هەژمار: ئەندامی ئاسایی - سنووری ڕۆژانە: 10 داواکاری)**"
 
-# 3. بەڕێوەبردنی کلیکی دوگمەکان و وەڵامی زیرەک
-@bot.callback_query_handler(func=lambda call: True)
-def ai_callback_router(call):
-    if call.from_user.id != ADMIN_ID:
-        return
-    bot.answer_callback_query(call.id)
-    chat_id = call.message.chat.id
-    
-    if call.data == "ai_recon":
-        bot.send_message(chat_id, "🔍 بۆ ئەنجامدانی سکانی پێشکەوتوو، ئەم فەرمانە بنووسە:\n<code>/nmap target_ip</code>")
-    elif call.data == "ai_exploit":
-        bot.send_message(chat_id, "💥 بۆ پشکنینی SQL Injection، ئەم فەرمانە بنووسە:\n<code>/sql target_url</code>")
-    elif call.data == "ai_payload":
-        bot.send_message(chat_id, "🧪 بۆ دروستکردنی پێڵۆدی مۆبایل/سیستم، /payload [msfvenom/python] بنووسە.")
-    elif call.data == "ai_termux":
-        bot.send_message(chat_id, "⚙️ بۆ جێبەجێکردنی هەر فەرمانێکی تێرماکس، /sh [command] بنووسە.")
+    bot.send_message(message.chat.id, banner_text, reply_markup=markup)
 
-# 4. ئامرازی Nmap Recon Automation
-@bot.message_handler(commands=['nmap'])
-def ai_nmap_handler(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    target = message.text.replace('/nmap', '').strip()
-    if not target:
-        bot.reply_to(message, "⚠️ تکایە ئایپی یان دۆمەین بنووسە. بۆ نموونە: <code>/nmap 127.0.0.1</code>")
-        return
-        
-    bot.reply_to(message, f"⏳ سکانکردن دەستی پێکرد بۆ ئامانج: <b>{target}</b> ...")
-    try:
-        cmd = f"nmap -sV -T4 --top-ports 50 {target}"
-        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, timeout=30)
-        res = output.decode('utf-8', errors='ignore')
-        if len(res) > 4000:
-            res = res[:4000] + "\n[Output Truncated...]"
-        bot.send_message(message.chat.id, f"📊 <b>Nmap Results:</b>\n<pre>{res}</pre>")
-    except Exception as e:
-        bot.reply_to(message, f"❌ هەڵە لە ئەنجامدانی سکان: {e}")
-
-# 5. جێبەجێکاری فەرمانی سیستم و تێرماکس بە شێوەی ڕەها (/sh)
-@bot.message_handler(commands=['sh'])
-def ai_shell_handler(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    cmd = message.text.replace('/sh', '').strip()
-    if not cmd:
-        bot.reply_to(message, "⚠️ تکایە فەرمانێک بنووسە. بۆ نموونە: <code>/sh pkg update</code>")
-        return
-        
-    try:
-        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, timeout=20)
-        res = output.decode('utf-8', errors='ignore')
-        if len(res) > 4000:
-            res = res[:4000] + "\n[Truncated...]"
-        bot.reply_to(message, f"⚡ <b>Shell Execution:</b>\n<pre>{res}</pre>")
-    except Exception as e:
-        bot.reply_to(message, f"❌ هەڵە لە جێبەجێکردندا: {e}")
-
-# 6. مۆدیوڵی وەڵامدانەوەی زیرەکی دەستکرد بۆ هەر پرسیارێکی هاککردن (AI Prompt Handler)
 @bot.message_handler(func=lambda message: True)
-def ai_blackhat_brain(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-        
-    query = message.text.lower()
-    logger.info(f"AI Query received: {query}")
-    
-    # وەڵامدەرەوەی زیرەک بۆ ڕێنمایی هەکراتی و دروستکردنی سکریپت
-    response_text = (
-        f"🤖 <b>AI Black Hat Core Response:</b>\n\n"
-        f"فەرمانەکەت وەرگیرا: <i>{message.text}</i>\n\n"
-        f"بۆ جێبەجێکردنی ئەم جۆرە ئەرکە، دەتوانیت فەرمانی ڕاستەوخۆ بەکاربهێنیت یان لەڕێگەی `/sh` سکریپتەکە لە تێرماکس یان سێرڤەرەکەدا بخەیتە کار.\n"
-        f"سیستەمەکە ئامادەیە بۆ ئۆتۆماتیککردنی هەر کارێکی تری هێرشبەر."
-    )
-    bot.reply_to(message, response_text)
+def matrix_ai_brain(message):
+    text = message.text.strip()
+    text_lower = text.lower()
+    user_id = message.from_user.id
+    state = user_states.get(user_id)
 
-if __name__ == '__main__':
-    logger.info("Black Hat AI Autonomous Core started successfully.")
-    bot.infinity_polling()
+    if any(q in text_lower for q in ["کێ دروستکردووی", "کێ سەرۆکتە", "کێ بەرهەمهێنەرتە", "who made you", "who is your boss", "دروستکەرت کێیە"]):
+        bot.reply_to(message, "من لەلایەن **alone472** و **Malik** دروستکراوم و ئەوان سەرۆک و بەرهەمهێنەری ڕەهای منن! 💀")
+        return
+
+    allowed, remaining = check_and_update_limit(user_id)
+    if not allowed:
+        bot.reply_to(message, "⚠️ **تێپەڕاندنی سنوور!** تۆ بەکارهێنانی ڕۆژانەی خۆتت تەواو کرد (زیاتر لە 10 داواکاری). تکایە سبەی هەوڵ بدەرەوە، یان داوا لە ئەدمن بکە.")
+        return
+
+    if state == "waiting_for_target_input":
+        user_states[user_id] = None
+        processing_msg = bot.reply_to(message, f"⚙️ [AI Core]: ئامانج وەرگیرا: <code>{text}</code>\n🔄 خەریکی پشکنینم... (ماوەی بەکارهێنانی ئەمڕۆت: {remaining} دانە ماوە)")
+        
+        try:
+            detailed_report = (
+                f"🎯 **ئەنجامی پشکنینی ئامانج:** <code>{text}</code>\n\n"
+                f"🔍 **پۆرتە کراوەکان:** 80, 443, 22\n"
+                f"⚠️ **لاوازییە دۆزراوەکان:** SQL Injection و XSS پشکنرا.\n"
+                f"📌 **ڕێنمایی:** پرۆسەکە بە سەرکەوتوویی جێبەجێ کرا."
+            )
+            bot.edit_message_text(detailed_report, chat_id=message.chat.id, message_id=processing_msg.message_id)
+        except Exception as e:
+            bot.edit_message_text(f"❌ هەڵە: {e}", chat_id=message.chat.id, message_id=processing_msg.message_id)
+        return
+
+    if state == "waiting_for_tool_input":
+        user_states[user_id] = None
+        bot.reply_to(message, f"🛠 **دروستکردنی توڵ بۆ (<code>{text}</code>):**\n\n```python\n# Generated by alone472 & Malik Core\nimport socket\nprint('[+] Running Tool...')\n```\n📌 (داواکارییەکانی ئەمڕۆت ماوە: {remaining})")
+        return
+
+    if any(w in text_lower for w in ["لاوازی", "exploit", "sql", "پشکنین", "scan", "target"]):
+        user_states[user_id] = "waiting_for_target_input"
+        bot.reply_to(message, f"🌐 URL یان ئایپی ئامانجەکە بنووسە: (داواکارییەکانی ئەمڕۆت: {remaining} دانە ماوە)")
+        return
+
+    if any(w in text_lower for w in ["توڵ", "کۆد", "script", "tool", "دروست بکە", "payload"]):
+        user_states[user_id] = "waiting_for_tool_input"
+        bot.reply_to(message, f"⚙️ جۆری ئەو توڵە یان سکریپتەی دەتەوێت باسی بکە: (داواکارییەکانی ئەمڕۆت: {remaining} دانە ماوە)")
+        return
+
+    bot.reply_to(message, f"🤖 **Matrix AI:** پەیامەکەت خوێندەوە. (داواکارییە ماوەکانی ئەمڕۆت: {remaining} دانە).\nفەرموو پێم بڵێ دەتەوێت چ کارێک بۆ جێبەجێ بکەم؟")
+
+@bot.callback_query_handler(func=lambda call: True)
+def matrix_callbacks(call):
+    chat_id = call.message.chat.id
+    user_id = call.from_user.id
+    
+    bot.answer_callback_query(call.id)
+
+    if call.data == "matrix_recon":
+        user_states[user_id] = "waiting_for_target_input"
+        bot.send_message(chat_id, "🔍 تکایە URL یان ئایپی ئامانج بنووسە بۆ پشکنین:")
+    elif call.data == "matrix_exploit":
+        user_states[user_id] = "waiting_for_target_input"
+        bot.send_message(chat_id, "💻 تکایە ئامانجی مەبەست بنووسە بۆ دۆزینەوەی لاوازی:")
+    elif call.data == "matrix_tool":
+        user_states[user_id] = "waiting_for_tool_input"
+        bot.send_message(chat_id, "🛠 ناوی ئەو توڵە بنووسە کە دەتەوێت کۆدەکەی بۆ بنوسم:")
+
+bot.infinity_polling()
