@@ -56,7 +56,6 @@ def init_db():
     c.commit()
 
 def log_user(message):
-    """تۆمارکردنی بەکارهێنەر لە داتابەیس کاتێک بۆ یەکەم جار نامە دەنێرێت"""
     uid = message.from_user.id
     fn = message.from_user.first_name
     un = message.from_user.username or ""
@@ -180,9 +179,11 @@ def _search_snippets(query, timeout=8):
 # ==========================================
 # 4. پەنێلی ئەدمین (Admin Panel)
 # ==========================================
-@bot.message_handler(commands=["panel"])
+@bot.message_handler(commands=["panel", "stats", "cmd_gift"])
 def cmd_panel(message):
-    if message.from_user.id != ADMIN_ID: return
+    if message.from_user.id != ADMIN_ID: 
+        bot.reply_to(message, "❌ تۆ ئەدمین نیت!")
+        return
     
     total_users = db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
     total_codes = db().execute("SELECT COUNT(*) FROM gift_codes").fetchone()[0]
@@ -205,7 +206,7 @@ def cmd_panel(message):
     )
     bot.send_message(message.chat.id, text, reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("admin_"))
+@bot.callback_query_handler(func=lambda call: True)
 def handle_admin_callbacks(call):
     if call.from_user.id != ADMIN_ID:
         bot.answer_callback_query(call.id, "❌ تۆ ئەدمین نیت!")
@@ -214,11 +215,10 @@ def handle_admin_callbacks(call):
     if call.data == "admin_stats":
         users = db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
         msgs = db().execute("SELECT COUNT(*) FROM user_memory").fetchone()[0]
-        bot.answer_callback_query(call.id)
+        bot.answer_callback_query(call.id, "✅ ئامارەکان نێردران")
         bot.send_message(call.message.chat.id, f"📊 <b>ئامار:</b>\n👤 بەکارهێنەران: {users}\n💬 نامەکان: {msgs}")
 
     elif call.data == "admin_members":
-        # وەرگرتنی 50 ئەندامی کۆتایی
         rows = db().execute("SELECT user_id, first_name, username, joined_at FROM users ORDER BY joined_at DESC LIMIT 50").fetchall()
         if not rows:
             bot.answer_callback_query(call.id, "هیچ ئەندامێک نییە.")
@@ -230,17 +230,17 @@ def handle_admin_callbacks(call):
             un_str = f"@{un}" if un else "بێ یوزەرنەیم"
             text += f"• {fn} ({un_str}) - <code>{uid}</code>\n"
         
-        bot.answer_callback_query(call.id)
+        bot.answer_callback_query(call.id, "✅ لیست نێردرا")
         bot.send_message(call.message.chat.id, text)
 
     elif call.data == "admin_broadcast":
         set_admin_state(ADMIN_ID, "wait_broadcast")
-        bot.answer_callback_query(call.id)
+        bot.answer_callback_query(call.id, "📢 نامەکە بنووسە")
         bot.send_message(call.message.chat.id, "📢 تکایە نامەکە بنووسە بۆ ناردن بۆ هەموو بەکارهێنەران:")
 
     elif call.data == "admin_gen":
         set_admin_state(ADMIN_ID, "wait_gen_reward")
-        bot.answer_callback_query(call.id)
+        bot.answer_callback_query(call.id, "🎁 ژمارەکە بنووسە")
         bot.send_message(call.message.chat.id, "🎁 تکایە ژمارەی پرسیارەکان (reward) بنووسە (بۆ نموونە: 10):")
 
     elif call.data == "admin_restart":
@@ -287,6 +287,7 @@ def cmd_start(message):
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
+    log_user(message)
     bot.reply_to(message, "🛠 <b>فەرمانەکان:</b>\n\n🌐 <b>وێب:</b> وێنە بنێرە، پاشان زمان.\n🎁 <b>خەڵات:</b> <code>/gift [کۆد]</code>\n📊 <b>کۆدی من:</b> <code>/credit</code>" + get_signature())
 
 @bot.message_handler(commands=["gift"])
@@ -322,6 +323,10 @@ def handle_text(message):
     ql = q.lower()
     state, _ = get_state(uid)
     
+    if q.startswith("/"):
+        bot.reply_to(message, "❌ فەرمانێکی نەناسراو.")
+        return
+
     if state == "wait_lang":
         found_lang = None
         for k, v in LANG_MAP.items():
