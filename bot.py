@@ -12,7 +12,7 @@ from telebot import types
 
 # ==========================================
 TOKEN = "8613090176:AAFK1kyiIBhGp7CP5PE_4xahT-gW1gTsx5M"
-ADMIN_ID = "5527152252"
+ADMIN_ID = 5527152252
 # ==========================================
 
 # ڕێکخستنی سیستەمی لۆگ و ئاگاداری
@@ -31,7 +31,7 @@ def check_and_update_limit(user_id):
     
     today = datetime.date.today().isoformat()
     
-    if user_id not in daily_limits || daily_limits[user_id]['date'] != today:
+    if user_id not in daily_limits or daily_limits[user_id]['date'] != today:
         daily_limits[user_id] = {'date': today, 'count': 0}
         
     if daily_limits[user_id]['count'] >= 10:
@@ -178,7 +178,6 @@ def ai_blackhat_brain(message):
         return
     elif state == "waiting_for_payload" or state == "waiting_for_shell":
         user_states[user_id] = None
-        # دروستکردنی نموونەی کۆدی گۆڕاو و تازە
         rand_port = random.randint(1000, 9999)
         code_example = (
             f"# Dynamic Python Exploit Core v{random.randint(2,9)}.0\n"
