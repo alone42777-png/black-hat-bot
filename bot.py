@@ -174,112 +174,101 @@ def _search_snippets(query, timeout=8):
         return []
 
 # ==========================================
-# 4. پەنێلی ئەدمین (Admin Panel)
+# 4. پەنێلی ئەدمین (بە دەق)
 # ==========================================
-@bot.message_handler(commands=["panel", "stats", "cmd_gift"])
+@bot.message_handler(commands=["panel"])
 def cmd_panel(message):
     log_user(message)
     if message.from_user.id != ADMIN_ID: 
-        bot.reply_to(message, "❌ تۆ ئەدمین نیت!")
         return
     
     total_users = db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
     total_codes = db().execute("SELECT COUNT(*) FROM gift_codes").fetchone()[0]
     used_codes = db().execute("SELECT COUNT(*) FROM gift_codes WHERE used_by IS NOT NULL").fetchone()[0]
     
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        types.InlineKeyboardButton("📊 ئاماری بەکارهێنەران", callback_data="admin_stats"),
-        types.InlineKeyboardButton("👥 لیستی ئەندامان", callback_data="admin_members"),
-        types.InlineKeyboardButton("📢 نامە بۆ هەمووان", callback_data="admin_broadcast"),
-        types.InlineKeyboardButton("🎁 دروستکردنی کۆد", callback_data="admin_gen"),
-        types.InlineKeyboardButton("♻️ ڕیستارتکردنی بۆت", callback_data="admin_restart")
-    )
-    
     text = (
         f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel)</b> 👑\n\n"
         f"👤 کۆی بەکارهێنەران: <b>{total_users}</b>\n"
         f"🎁 کۆدی خەڵات: <b>{total_codes}</b> (بەکارهاتوو: {used_codes})\n\n"
-        f"تکایە یەکێک لە بژاردەکان هەڵبژێرە:"
+        f"📌 <b>فەرمانەکانی ئەدمین (بە دەق بنووسە):</b>\n\n"
+        f"🔹 <code>/stats</code>\n"
+        f"<i>ئاماری تەواوی بۆتەکە نیشان دەدات.</i>\n\n"
+        f"🔹 <code>/members</code>\n"
+        f"<i>لیستی دوایین 50 کەسی جۆینبوو نیشان دەدات.</i>\n\n"
+        f"🔹 <code>/broadcast [نامە]</code>\n"
+        f"<i>نامەیەک دەنێرێت بۆ هەموو بەکارهێنەران. نموونە: <code>/broadcast سڵاو بۆ هەمووان</code></i>\n\n"
+        f"🔹 <code>/gen [ژمارە]</code>\n"
+        f"<i>کۆدی خەڵاتی نوێ دروست دەکات. نموونە: <code>/gen 10</code></i>\n\n"
+        f"🔹 <code>/restart</code>\n"
+        f"<i>بۆتەکە ڕیستارت دەکات.</i>"
     )
-    bot.send_message(message.chat.id, text, reply_markup=markup)
+    bot.send_message(message.chat.id, text)
 
-@bot.callback_query_handler(func=lambda call: True)
-def handle_admin_callbacks(call):
-    if call.from_user.id != ADMIN_ID:
-        bot.answer_callback_query(call.id, "❌ تۆ ئەدمین نیت!")
+@bot.message_handler(commands=["stats"])
+def cmd_stats(message):
+    if message.from_user.id != ADMIN_ID: return
+    users = db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    msgs = db().execute("SELECT COUNT(*) FROM user_memory").fetchone()[0]
+    bot.reply_to(message, f"📊 <b>ئاماری سیستەم:</b>\n\n👤 بەکارهێنەران: {users}\n💬 نامە تۆمارکراوەکان: {msgs}")
+
+@bot.message_handler(commands=["members"])
+def cmd_members(message):
+    if message.from_user.id != ADMIN_ID: return
+    rows = db().execute("SELECT user_id, first_name, username FROM users ORDER BY joined_at DESC LIMIT 50").fetchall()
+    if not rows:
+        bot.reply_to(message, "هیچ ئەندامێک نییە.")
         return
+    text = "👥 <b>دوایین 50 ئەندام:</b>\n\n"
+    for r in rows:
+        uid, fn, un = r
+        un_str = f"@{un}" if un else "بێ یوزەرنەیم"
+        text += f"• {fn} ({un_str}) - <code>{uid}</code>\n"
+    bot.reply_to(message, text)
 
-    if call.data == "admin_stats":
-        users = db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        msgs = db().execute("SELECT COUNT(*) FROM user_memory").fetchone()[0]
-        bot.answer_callback_query(call.id, "✅ ئامارەکان نێردران")
-        bot.send_message(call.message.chat.id, f"📊 <b>ئامار:</b>\n👤 بەکارهێنەران: {users}\n💬 نامەکان: {msgs}")
+@bot.message_handler(commands=["broadcast"])
+def cmd_broadcast(message):
+    if message.from_user.id != ADMIN_ID: return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "⚠️ تکایە نامەکە بنووسە. نموونە:\n<code>/broadcast سڵاو بۆ هەمووان</code>")
+        return
+    
+    msg_text = parts[1]
+    bot.reply_to(message, "⏳ دەستپێکردنی ناردن...")
+    users = db().execute("SELECT user_id FROM users").fetchall()
+    sent, failed = 0, 0
+    for (uid,) in users:
+        try:
+            bot.send_message(uid, msg_text)
+            sent += 1
+        except Exception:
+            failed += 1
+    bot.reply_to(message, f"✅ نێردرا بۆ: {sent}\n❌ شکست: {failed}")
 
-    elif call.data == "admin_members":
-        rows = db().execute("SELECT user_id, first_name, username, joined_at FROM users ORDER BY joined_at DESC LIMIT 50").fetchall()
-        if not rows:
-            bot.answer_callback_query(call.id, "هیچ ئەندامێک نییە.")
-            return
-        text = "👥 <b>دوایین 50 ئەندام:</b>\n\n"
-        for r in rows:
-            uid, fn, un, jd = r
-            un_str = f"@{un}" if un else "بێ یوزەرنەیم"
-            text += f"• {fn} ({un_str}) - <code>{uid}</code>\n"
-        bot.answer_callback_query(call.id, "✅ لیست نێردرا")
-        bot.send_message(call.message.chat.id, text)
+@bot.message_handler(commands=["gen"])
+def cmd_gen(message):
+    if message.from_user.id != ADMIN_ID: return
+    parts = message.text.split(maxsplit=1)
+    reward = 10
+    if len(parts) > 1 and parts[1].isdigit():
+        reward = int(parts[1])
+    code = create_gift(reward)
+    bot.reply_to(message, f"✅ کۆدی نوێ دروستکرا:\n<code>{code}</code>\n🎁 Reward: {reward}")
 
-    elif call.data == "admin_broadcast":
-        set_admin_state(ADMIN_ID, "wait_broadcast")
-        bot.answer_callback_query(call.id, "📢 نامەکە بنووسە")
-        bot.send_message(call.message.chat.id, "📢 تکایە نامەکە بنووسە بۆ ناردن بۆ هەموو بەکارهێنەران:")
+@bot.message_handler(commands=["restart"])
+def cmd_restart(message):
+    if message.from_user.id != ADMIN_ID: return
+    bot.reply_to(message, "♻️ بۆت ڕیستارت دەکرێت...")
+    os.execv(sys.executable, ['python'] + sys.argv)
 
-    elif call.data == "admin_gen":
-        set_admin_state(ADMIN_ID, "wait_gen_reward")
-        bot.answer_callback_query(call.id, "🎁 ژمارەکە بنووسە")
-        bot.send_message(call.message.chat.id, "🎁 تکایە ژمارەی پرسیارەکان (reward) بنووسە (بۆ نموونە: 10):")
-
-    elif call.data == "admin_restart":
-        bot.answer_callback_query(call.id, "♻️ ڕیستارت دەکرێت...")
-        bot.send_message(call.message.chat.id, "♻️ بۆت ڕیستارت کرا. تکایە چاوەڕوان بە...")
-        os.execv(sys.executable, ['python'] + sys.argv)
-
-# ==========================================
-# 5. هەندلەرەکانی ئەدمین (Admin Text Input)
-# ==========================================
-@bot.message_handler(func=lambda m: m.from_user.id == ADMIN_ID and get_admin_state(ADMIN_ID)[0] in ("wait_broadcast", "wait_gen_reward"), content_types=["text"])
-def handle_admin_input(message):
-    state, _ = get_admin_state(ADMIN_ID)
-    q = message.text.strip()
-
-    if state == "wait_broadcast":
-        clear_admin_state(ADMIN_ID)
-        bot.reply_to(message, "⏳ دەستپێکردنی ناردن...")
-        users = db().execute("SELECT user_id FROM users").fetchall()
-        sent, failed = 0, 0
-        for (uid,) in users:
-            try:
-                bot.send_message(uid, q)
-                sent += 1
-            except Exception:
-                failed += 1
-        bot.reply_to(message, f"✅ نێردرا بۆ: {sent}\n❌ شکست: {failed}")
-
-    elif state == "wait_gen_reward":
-        clear_admin_state(ADMIN_ID)
-        if not q.isdigit():
-            bot.reply_to(message, "❌ تکایە تەنها ژمارە بنووسە.")
-            return
-        code = create_gift(int(q))
-        bot.reply_to(message, f"✅ کۆدی نوێ دروستکرا:\n<code>{code}</code>\n🎁 Reward: {q}")
 
 # ==========================================
-# 6. هەندلەرەکانی بەکارهێنەر
+# 5. هەندلەرەکانی بەکارهێنەر
 # ==========================================
 @bot.message_handler(commands=["start"])
 def cmd_start(message):
     log_user(message)
-    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v43.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە." + get_signature())
+    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v44.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
@@ -311,8 +300,7 @@ def handle_photo(message):
     set_state(message.from_user.id, "wait_lang")
     bot.reply_to(message, "📷 <b>وێنە وەرگیرا.</b>\nئێستا ناوی زمانەکە بنووسە: <code>HTML</code>, <code>CSS</code>, <code>JS</code>, <code>PHP</code>, <code>Python</code>.")
 
-# فلتەرێکی تەواو بۆ نامە دەقییەکان کە ڕێگە بە دوگمەکان نادات تێکبچێن
-@bot.message_handler(func=lambda m: not (m.from_user.id == ADMIN_ID and get_admin_state(ADMIN_ID)[0] in ("wait_broadcast", "wait_gen_reward")) and not m.text.startswith("/"), content_types=["text"])
+@bot.message_handler(func=lambda m: not m.text.startswith("/"), content_types=["text"])
 def handle_text(message):
     log_user(message)
     uid = message.from_user.id
@@ -365,5 +353,5 @@ def handle_text(message):
 
 if __name__ == "__main__":
     init_db()
-    logger.info("v43 Admin Panel up and running. absolute olliE.")
+    logger.info("v44 Text-Based Admin Panel up and running. absolute olliE.")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
