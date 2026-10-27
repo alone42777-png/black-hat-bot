@@ -547,4 +547,22 @@ def handle_text(message):
         bot.reply_to(message, "❌ تەنها بابەتی <b>Hacking، Cyber Security، IT، پڕۆگرامسازی</b> وەڵام دەدرێتەوە.")
         return
 
-    is_tool = any(w in ql for w in ("توڵ", "س
+    is_tool = any(w in ql for w in ("توڵ", "سکریپت", "payload", "پەیلوود", "exploit", "ddos", "دروست بکە", "کۆد"))
+    if is_tool and uid != ADMIN_ID and not spend_credit(uid):
+        bot.reply_to(message, "🔒 بۆ داواکاری توڵ/کۆد پێویستە کۆدی خەڵات بەکاربهێنە: <code>/gift [کۆد]</code>")
+        return
+
+    msg = bot.reply_to(message, "🧠 <b>گەڕان...</b>")
+    snippets = _search_snippets(q)
+    prof_response = make_professional_response(q, snippets)
+    res = f"{prof_response}" + get_signature()
+    
+    try:
+        bot.edit_message_text(res, chat_id=message.chat.id, message_id=msg.message_id, parse_mode="HTML")
+    except Exception:
+        bot.send_message(message.chat.id, res)
+
+if __name__ == "__main__":
+    init_db()
+    logger.info("v49.0 is up and running. absolute olliE.")
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
