@@ -2,7 +2,7 @@ name: Run Black Hat Bot
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # هەموو 5 خولەک جارێک خۆکارانە کار دەکاتەوە
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: setup-python@v4
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
@@ -22,8 +22,5 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run bot
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          ADMIN_ID: ${{ secrets.ADMIN_ID }}
         run: |
           python bot.py
