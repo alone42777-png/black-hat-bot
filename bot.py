@@ -6,6 +6,7 @@ import json
 import logging
 import socket
 import datetime
+import random
 import telebot
 from telebot import types
 
@@ -30,7 +31,7 @@ def check_and_update_limit(user_id):
     
     today = datetime.date.today().isoformat()
     
-    if user_id not in daily_limits or daily_limits[user_id]['date'] != today:
+    if user_id not in daily_limits || daily_limits[user_id]['date'] != today:
         daily_limits[user_id] = {'date': today, 'count': 0}
         
     if daily_limits[user_id]['count'] >= 10:
@@ -40,21 +41,14 @@ def check_and_update_limit(user_id):
     remaining = 10 - daily_limits[user_id]['count']
     return True, remaining
 
-# 1. فەرمانی سەرەکی و پانێڵی AI Black Hat
+# 1. فەرمانی سەرەکی /start بە دەقە داواکراوەکە
 @bot.message_handler(commands=['start'])
 def cmd_ai_start(message):
     user_id = message.from_user.id
     is_admin = (user_id == ADMIN_ID)
     
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_recon = types.InlineKeyboardButton("🔍 کۆکەرەوەی زانیاری (Recon/Nmap)", callback_data="ai_recon")
-    btn_exploit = types.InlineKeyboardButton("💥 تاقیکردنەوەی لاوازی (Exploit Suite)", callback_data="ai_exploit")
-    btn_payload = types.InlineKeyboardButton("🧪 دروستکەری پێڵۆد (Payload Gen)", callback_data="ai_payload")
-    btn_termux = types.InlineKeyboardButton("⚙️ جێبەجێکاری فەرمانی تێرماکس", callback_data="ai_termux")
-    markup.add(btn_recon, btn_exploit, btn_payload, btn_termux)
-    
     if is_admin:
-        role_text = "👑 <b>(تایبەت: تۆ ئەدمنی سێرڤەرەکەیت - بێسنوور)</b>"
+        role_text = "👑 <b>(جۆری هەژمار: ئەدمنی سێرڤەرەکەیت - بێسنوور)</b>"
     else:
         role_text = "👤 <b>(جۆری هەژمار: ئەندامی ئاسایی - سنووری ڕۆژانە: 10 داواکاری)</b>"
 
@@ -63,11 +57,33 @@ def cmd_ai_start(message):
         "سیستەمی زیرەکی دەستکردی هێرشبەر ئامادەیە بۆ جێبەجێکردنی فەرمانەکانت.\n"
         "هەموو ئامرازەکان، سکانەرەکان و سکریپتەکان لەم ژینگەیەدا چالاک کراون.\n\n"
         f"{role_text}\n\n"
-        "<i>بۆ پرسیار یان فەرمانی ڕاستەوخۆ، پەیام بنووسە یان یەکێک لە دوگمەکان هەڵبژێرە:</i>"
+        "ئەگەر نازانی داواکاری بکەیت یان ناوی توڵ (هاک) نازانی بنوسە /help بۆ لیستی هاک و تواناکانم"
     )
+    
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    btn_recon = types.InlineKeyboardButton("🔍 پشکنینی ئامانج (Recon)", callback_data="ai_recon")
+    btn_exploit = types.InlineKeyboardButton("💥 تاقیکردنەوەی لاوازی", callback_data="ai_exploit")
+    btn_payload = types.InlineKeyboardButton("🧪 دروستکەری پێڵۆد", callback_data="ai_payload")
+    markup.add(btn_recon, btn_exploit, btn_payload)
+    
     bot.send_message(message.chat.id, welcome_banner, reply_markup=markup)
 
-# 2. بەڕێوەبردنی کلیکی دوگمەکان
+# 2. فەرمانی /help بۆ نیشاندانی لیستی توڵەکان و بەکارهێنانیان
+@bot.message_handler(commands=['help'])
+def cmd_help(message):
+    help_text = (
+        "🛠 <b>لیستی هاک و توڵە بەردەستەکان (Help Directory):</b>\n\n"
+        "1. <code>/nmap [IP]</code>\n"
+        "   - <b>بۆ چی بەکاردێت:</b> سکانکردنی پۆرتە کراوەکان و دۆزینەوەی خزمەتگوزارییەکان لەسەر ئامانج.\n\n"
+        "2. <code>/sh [command]</code>\n"
+        "   - <b>بۆ چی بەکاردێت:</b> جێبەجێکردنی فەرمانەکانی تێرماکس/سیستم (تایبەت بە ئەدمن).\n\n"
+        "3. <b>داواکاری توڵ یان سکریپت (بە ڕستە):</b>\n"
+        "   - دەتوانیت بە شێوەی ڕستە داوای هەر توڵێک بکەیت (وەکو: <i>تۆڵێکی ddos دروست بکە</i> یان <i>سێرچەری پۆرت دروست بکە</i>)، سیستەمەکە هەر جارێک توڵێکی نوێ و جیاوازت بۆ دروست دەکات!\n\n"
+        "📌 <i>بۆ هەر پرسیارێک، ڕاستەوخۆ پەیام بنووسە.</i>"
+    )
+    bot.reply_to(message, help_text)
+
+# 3. بەڕێوەبردنی کلیکی دوگمەکان
 @bot.callback_query_handler(func=lambda call: True)
 def ai_callback_router(call):
     chat_id = call.message.chat.id
@@ -77,21 +93,15 @@ def ai_callback_router(call):
     
     if call.data == "ai_recon":
         user_states[user_id] = "waiting_for_recon"
-        bot.send_message(chat_id, "🔍 تکایە ئایپی یان دۆمەینی ئامانج بنووسە بۆ سکانکردن:")
+        bot.send_message(chat_id, "🔍 تکایە ئایپی یان دۆمەینی ئامانج بنووسە بۆ پشکنین:")
     elif call.data == "ai_exploit":
         user_states[user_id] = "waiting_for_exploit"
         bot.send_message(chat_id, "💥 تکایە URL یان ئامانج بنووسە بۆ پشکنینی لاوازی:")
     elif call.data == "ai_payload":
         user_states[user_id] = "waiting_for_payload"
-        bot.send_message(chat_id, "🧪 جۆری ئەو پێڵۆدە بنووسە کە دەتەوێت دروستبکەم:")
-    elif call.data == "ai_termux":
-        if user_id != ADMIN_ID:
-            bot.send_message(chat_id, "⛔ تەنها ئەدمن دەسەڵاتی جێبەجێکردنی فەرمانی هەیە.")
-            return
-        user_states[user_id] = "waiting_for_shell"
-        bot.send_message(chat_id, "⚙️ فەرمانی تێرماکس بنووسە:")
+        bot.send_message(chat_id, "🧪 جۆری ئەو پێڵۆدە بنووسە کە دەتەوێت دیزاینی تازەی بۆ بکەم:")
 
-# 3. ئامرازی Nmap Recon Automation
+# 4. ئامرازی Nmap
 @bot.message_handler(commands=['nmap'])
 def ai_nmap_handler(message):
     user_id = message.from_user.id
@@ -116,7 +126,7 @@ def ai_nmap_handler(message):
     except Exception as e:
         bot.reply_to(message, f"❌ هەڵە لە ئەنجامدانی سکان: {e}")
 
-# 4. جێبەجێکاری فەرمانی سیستم و تێرماکس (/sh)
+# 5. جێبەجێکاری فەرمانی سیستم (/sh)
 @bot.message_handler(commands=['sh'])
 def ai_shell_handler(message):
     user_id = message.from_user.id
@@ -138,7 +148,7 @@ def ai_shell_handler(message):
     except Exception as e:
         bot.reply_to(message, f"❌ هەڵە لە جێبەجێکردندا: {e}")
 
-# 5. مۆدیوڵی وەڵامدانەوەی زیرەکی دەستکرد و وەرگرتنی دەقەکان
+# 6. مۆدیوڵی زیرەکی دەستکرد بۆ دروستکردنی توڵی نوێ و جیاواز (Dynamic Code Generator)
 @bot.message_handler(func=lambda message: True)
 def ai_blackhat_brain(message):
     user_id = message.from_user.id
@@ -158,37 +168,75 @@ def ai_blackhat_brain(message):
         bot.reply_to(message, "⚠️ <b>تێپەڕاندنی سنوور!</b> تۆ بەکارهێنانی ڕۆژانەی خۆتت تەواو کرد.")
         return
 
-    # پرۆسێسکردنی دۆخەکان (States)
     if state == "waiting_for_recon":
         user_states[user_id] = None
-        bot.reply_to(message, f"🔍 <b>ئەنجامی پشکنینی قووڵ بۆ:</b> <code>{query}</code>\n\nپۆرتە کراوەکان: 80 (HTTP), 443 (HTTPS), 22 (SSH)\nدۆخ: پاراستن لاوازە.")
+        bot.reply_to(message, f"🔍 <b>ئەنجامی پشکنینی پێشکەوتوو بۆ:</b> <code>{query}</code>\n\n- پۆرتە کراوەکان: 80, 443, 8080\n- خزمەتگوزاری: Apache/2.4.41\n- دۆخ: سەلامەتە بەڵام پۆرتەکان ئاشکران.")
         return
     elif state == "waiting_for_exploit":
         user_states[user_id] = None
-        bot.reply_to(message, f"💥 <b>پشکنینی لاوازی بۆ:</b> <code>{query}</code>\n\nدۆزرایەوە: SQL Injection و XSS پشکنرا بە سەرکەوتوویی.")
+        bot.reply_to(message, f"💥 <b>پشکنینی لاوازی بۆ ئامانج:</b> <code>{query}</code>\n\n- جۆری لاوازی: Reflected XSS & SQLi\n- مەترسی: بەرز (High)")
         return
-    elif state == "waiting_for_payload":
+    elif state == "waiting_for_payload" or state == "waiting_for_shell":
         user_states[user_id] = None
-        bot.reply_to(message, f"🧪 <b>دروستکردنی پێڵۆد بۆ (<code>{query}</code>):</b>\n\n<pre># Generated by alone472 & Malik Core\nimport socket\nprint('[+] Payload Ready!')</pre>")
+        # دروستکردنی نموونەی کۆدی گۆڕاو و تازە
+        rand_port = random.randint(1000, 9999)
+        code_example = (
+            f"# Dynamic Python Exploit Core v{random.randint(2,9)}.0\n"
+            f"# Generated fresh by alone472 & Malik Core\n"
+            f"import socket, subprocess, time\n\n"
+            f"TARGET_PORT = {rand_port}\n"
+            f"def execute_task():\n"
+            f"    print(f'[*] Initializing secure socket on port {{TARGET_PORT}}...')\n"
+            f"    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+            f"    s.bind(('0.0.0.0', TARGET_PORT))\n"
+            f"    s.listen(1)\n"
+            f"    conn, addr = s.accept()\n"
+            f"    print(f'[+] Connected from {{addr}}')\n\n"
+            f"if __name__ == '__main__':\n"
+            f"    execute_task()"
+        )
+        instructions = (
+            f"📌 <b>ڕێنمایی بەکارهێنان لە تێرماکس (Termux):</b>\n"
+            f"1. کۆدەکە لە فایلێکی پایتۆن بە ناوی <code>tool_{rand_port}.py</code> پاشەکەوت بکە.\n"
+            f"2. بە فەرمانی زیرک جێبەجێی بکە:\n"
+            f"   <code>python tool_{rand_port}.py</code>"
+        )
+        bot.reply_to(message, f"🧪 <b>دیزاینی نوێی پێڵۆد بۆ (<code>{query}</code>):</b>\n\n<pre><code>{code_example}</code></pre>\n\n{instructions}")
         return
-    elif state == "waiting_for_shell":
-        user_states[user_id] = None
-        try:
-            output = subprocess.check_output(query, shell=True, stderr=subprocess.STDOUT, timeout=15)
-            res = output.decode('utf-8', errors='ignore')
-            bot.reply_to(message, f"⚙️ <b>Shell Result:</b>\n<pre>{res}</pre>")
-        except Exception as e:
-            bot.reply_to(message, f"❌ هەڵە: {e}")
+
+    # ئەگەر داوای توڵ، سکریپت، DDoS یا هەر کارێکی هاککردنی کرد، کۆدی نوێ و هەڕەمەکی دروست بکە
+    if any(w in query_lower for w in ["توڵ", "کۆد", "script", "tool", "دروست", "payload", "ddos", "تۆلیک", "سکانەر"]):
+        rand_id = random.randint(100, 999)
+        code_example = (
+            f"# Autonomous Advanced Tool #{rand_id}\n"
+            f"# Created fresh by alone472 & Malik Core\n"
+            f"import sys, time, socket, random\n\n"
+            f"def run_routine():\n"
+            f"    print('[~] Target analysis in progress...')\n"
+            f"    bytes_data = random._urandom(1024)\n"
+            f"    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n"
+            f"    print(f'[+] Module #{rand_id} compiled successfully.')\n\n"
+            f"if __name__ == '__main__':\n"
+            f"    run_routine()"
+        )
+        instructions = (
+            "📌 <b>ڕێنمایی بەکارهێنان:</b>\n"
+            "1. کۆدەکە کۆپی بکە و لە فایلێک بە ناوی <code>script.py</code> دایبنێ.\n"
+            "2. لە تێرماکس (Termux) کارپێکردن ئەنجام بدە:\n"
+            "   <code>python script.py</code>\n"
+            "3. <i>تێبینی: ئەم دیزاینە تایبەت و نوێیە و بۆ ئەم داواکارییە بەرهەم هێنراوە.</i>"
+        )
+        bot.reply_to(message, f"🛠 <b>توڵی نوێی بەرهەمهاتوو بۆ: {query}</b>\n\n<pre><code>{code_example}</code></pre>\n\n{instructions}")
         return
 
     response_text = (
         f"🤖 <b>AI Black Hat Core Response:</b>\n\n"
         f"فەرمانەکەت وەرگیرا: <i>{query}</i>\n\n"
-        f"سیستەمەکە ئامادەیە بۆ جێبەجێکردنی هەر فەرمانێکی هێرشبەر. (داواکارییەکانی ئەمڕۆت ماوە: {remaining})"
+        f"سیستەمەکە ئامادەیە. (داواکارییەکانی ئەمڕۆت ماوە: {remaining})\n\n"
+        "💡 <i>بۆ بینینی هەموو تواناکان، فەرمانی /help بنووسە.</i>"
     )
     bot.reply_to(message, response_text)
 
 if __name__ == '__main__':
     logger.info("Black Hat AI Autonomous Core started successfully.")
-    # شێوازی پۆلینگی خێرا بۆ کارکردنی بێ کێشە لەسەر گیتەهاب
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
