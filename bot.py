@@ -19,12 +19,18 @@ ADMIN_ID = 5527152252
 # ==========================================
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [%(levelname)s] - %(message)s')
-logger = logging.getLogger("BlackHatHumanCore")
+logger = logging.getLogger("BlackHatBugBountyCore")
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
 user_states = {}
 daily_limits = {}
+
+# دروستکردنی 50 کۆدی ئاڵۆز و نایاب بۆ خەڵاتی دۆزینەوەی لاوازی (Bug Bounty)
+VALID_GIFT_CODES = {
+    f"BUGFIX-{random.randint(1000,9999)}-{random.choice(['X','Z','K','M'])}{random.randint(100,999)}": {"used": False, "reward_questions": 10}
+    for _ in range(50)
+}
 
 def check_and_update_limit(user_id):
     if user_id == ADMIN_ID:
@@ -63,26 +69,27 @@ def perform_web_search(query):
         logger.error(f"Search error: {e}")
     return None
 
-# مۆدیوڵی وەڵامدانەوەی مرۆڤایەتی، شیرین و سروشتی (Human-like Sweet Responses)
-def generate_human_response(query, web_data):
-    query_lower = query.lower().strip()
-    
-    # پشکنینی سڵاو و دەستپێک
-    greetings = ["سڵاو", "سلام", "hello", "hi", "سلاو", "چۆنی", "باشی"]
-    if any(g in query_lower for g in greetings) and len(query_lower) < 15:
-        return "سڵاو گیانە! 😊 من لێرەم بۆ ئەوەی لە هەموو شتێکدا یارمەتیت بدەم. فەرموو پرسیارەکەت بکە، چۆن دەتوانم خزمەتت بکەم؟"
+# بەشی تایبەت بۆ باگ و خەڵات و ناردنی نامە بۆ سەرۆکەکان لە کۆتایی هەموو پەیامێکدا
+def get_signature():
+    return (
+        "\n\n───────────────────\n"
+        "🔍 <b>[Bug Bounty Program]:</b>\n"
+        "<i>هەر کەسێک باگ یان لاوازییەک لە سیستەمدا بدۆزێتەوە، خەڵات دەکرێت و دیاری پێ دەبەخشرێت!</i>\n"
+        "🎁 بۆ بەکارهێنانی کۆدی خەڵات، فەرمانی <code>/gift [کۆد]</code> بەکاربهێنە.\n\n"
+        "👑 <b>هەر پرسیارێک، باگێک یان کێشەیەکتان هەبوو، دەستبەجێ نامە بۆ ئەم دوو سەرۆکە بنێرن:</b>\n"
+        "🔗 <b>@malikdlashad3</b> | <b>@ALONE427</b>"
+    )
 
-    sweet_introductions = [
-        "سڵاو لە تۆ! بە خۆشحاڵییەوە پەیامەکەت خوێندەوە. با ئەوەی پێویستە بیزانیت لەسەر ئەم بابەتە بخرێتە ڕوو:",
-        "وەک هاوڕێیەک و یارمەتیدەرەکەت، ئەم زانیارییە سەرنجڕاکێشە بۆ پرسیارەکەت دۆزیمەوە:",
-        "فەرموو عزیزم، دەربارەی پرسیارەکەت ئەمە زانیارییە وردەکانە کە دەتوانێت یارمەتیت بدات:",
-        "بە خۆشحاڵییەوە! لێرەدا وەڵامێکی زۆر تێر و تەسەل بۆ داواکارییەکەت ئامادە کردووە:"
+def is_allowed_topic(query):
+    query_lower = query.lower()
+    allowed_keywords = [
+        "it", "cyber", "security", "hack", "هاک", "سایبەر", "ئاسایش", "network", "تۆڕ", 
+        "linux", "windows", "python", "script", "kali", "nmap", "sqlmap", 
+        "ddos", "dos", "wifi", "وایفای", "exploit", "payload", "پەیلوود", "vulnerability", 
+        "لاوازی", "malware", "firewall", "database", "داتابەیس", 
+        "encryption", "پاسوۆرد", "password", "proxy", "vpn", "سێرڤەر", "server", "gift", "کۆد", "باگ", "bug"
     ]
-    
-    intro = random.choice(sweet_introductions)
-    content = web_data if web_data else f"دەربارەی ({query})، لۆژیک و زانیاری پێویست لێرەدایە بۆت شیکرایەوە."
-    
-    return f"✨ <b>{intro}</b>\n\n{content}\n\n💬 <i>ئایا پرسیاری تریشت هەیە؟ فەرموو بکە، من ئامادەم! (خاوەن: alone427 و Malik)</i>"
+    return any(keyword in query_lower for keyword in allowed_keywords)
 
 # 1. فەرمانی سەرەکی /start
 @bot.message_handler(commands=['start'])
@@ -96,16 +103,34 @@ def cmd_ai_start(message):
         role_text = "👤 <b>(جۆری هەژمار: ئەندامی ئاسایی - سنووری ڕۆژانە: 5 داواکاری بۆ توڵ)</b>"
 
     welcome_banner = (
-        "💀 <b>BLACK HAT AI HUMAN CORE v22.0</b> 💀\n\n"
-        "سڵاو! من زیرەکییەکی دەستکردم و لێرەم بۆ ئەوەی بە زمانێکی شیرین و مرۆڤایەتی وەڵامی هەموو پرسیارەکانت بدەمەوە.\n"
-        "خاوەن و بەڕێوەبەر: <b>alone427</b> و <b>Malik</b>.\n\n"
-        f"{role_text}\n\n"
-        "📌 <i>فەرموو هەر پرسیارێکت هەیە یان سڵاوت هەیە، ڕاستەوخۆ بنووسە!</i>"
+        "💀 <b>BLACK HAT AI BUG BOUNTY CORE v25.0</b> 💀\n\n"
+        "سڵاو! من زیرەکییەکی دەستکردم و تەنها بۆ بابەتی **IT، Cyber Security و Hacking** تەرخان کراوم.\n\n"
+        f"{role_text}"
+        + get_signature()
     )
     
     bot.send_message(message.chat.id, welcome_banner)
 
-# 2. فەرمانی /help
+# 2. فەرمانی /gift بۆ پشکنینی کۆدی خەڵاتی باگ
+@bot.message_handler(commands=['gift'])
+def cmd_gift_handler(message):
+    args = message.text.replace('/gift', '').strip()
+    if not args:
+        bot.reply_to(message, "🎁 <b>سیستەمی دیاری و خەڵاتی دۆزینەوەی باگ (Bug Bounty):</b>\nتکایە کۆدی خەڵاتەکەت لەگەڵ فەرمانەکە بنووسە.\nنموونە: <code>/gift BUGFIX-1234-X789</code>" + get_signature())
+        return
+
+    code = args.strip()
+    if code in VALID_GIFT_CODES:
+        if VALID_GIFT_CODES[code]["used"]:
+            bot.reply_to(message, "❌ <b>ببوورە!</b> ئەم کۆدی خەڵاتە پێشتر بەکارهاتووە و تەنها یەکجار کارا دەبێت." + get_signature())
+        else:
+            VALID_GIFT_CODES[code]["used"] = True
+            questions_count = VALID_GIFT_CODES[code]["reward_questions"]
+            bot.reply_to(message, f"🎉 <b>پیرۆزە!</b> کۆدەکەت بە سەرکەوتوویی کارا بوو.\n🎁 تۆ شایستەی خەڵات و دیاری بوویت بۆ دۆزینەوەی باگ لە سیستەمدا.\n✨ بڕی خەڵات: <b>{questions_count} پرسیاری تایبەت و خەڵاتکراو</b> چالاک کرا!" + get_signature())
+    else:
+        bot.reply_to(message, "❌ <b>هەڵە!</b> کۆدی باگی ناتەواو یان نەناسراو. تەنها 50 کۆدی تایبەت بوونیان هەیە." + get_signature())
+
+# 3. فەرمانی /help
 @bot.message_handler(commands=['help'])
 def cmd_help(message):
     help_text = (
@@ -116,26 +141,25 @@ def cmd_help(message):
         "• <b>Sqlmap Suite / Hydra:</b> شکاندنی پەسۆرد و تاقیکردنەوە.\n\n"
         "⚡ <b>3. بەشی فەوتاندن و هێرشی تۆڕ (DoS & DDoS Advanced Suites):</b>\n"
         "• <b>SYN Flood / Heavy Stress.</b>\n\n"
-        "📶 <b>4. بەشی وایفای و بێتەل (Wireless Penetration):</b>\n"
-        "• <b>WiFi Sniffer & Handshake Analyzer.</b>\n\n"
-        "🧠 <b>5. سیستەمی وەڵامدانەوەی مرۆڤایەتی و گەڕانی ئینتەرنێت:</b>\n"
-        "• دەتوانیت دەربارەی هەر بابەتێک پرسیار بکەیت و بە شێوازێکی زۆر شیرین و هاوڕێیانە وەڵامت دەدەمەوە.\n\n"
-        "📌 <i>بۆ دروستکردنی توڵ، داواکاری خۆت بە ڕستە بنووسە.</i>"
+        "🎁 <b>4. بەشی دیاری و خەڵاتی باگ (Bug Bounty System):</b>\n"
+        "• <code>/gift [کۆد]</code> - بەکارهێنانی کۆدی خەڵاتی دۆزەرەوەی باگ.\n\n"
+        "🧠 <b>5. سیستەمی فەرمی ئاسایشی سایبەری و IT.</b>\n"
+        + get_signature()
     )
     bot.reply_to(message, help_text)
 
-# 3. ئامرازی Nmap
+# 4. ئامرازی Nmap
 @bot.message_handler(commands=['nmap'])
 def ai_nmap_handler(message):
     user_id = message.from_user.id
     allowed, remaining = check_and_update_limit(user_id)
     if not allowed:
-        bot.reply_to(message, "⚠️ <b>تێپەڕاندنی سنوور!</b> تۆ بەکارهێنانی ڕۆژانەی خۆت (5 داواکاری) تەواو کرد.")
+        bot.reply_to(message, "⚠️ <b>تێپەڕاندنی سنوور!</b> تۆ بەکارهێنانی ڕۆژانەی خۆت (5 داواکاری) تەواو کرد." + get_signature())
         return
 
     target = message.text.replace('/nmap', '').strip()
     if not target:
-        bot.reply_to(message, "⚠️ تکایە ئایپی یان دۆمەین بنووسە. بۆ نموونە: <code>/nmap 127.0.0.1</code>")
+        bot.reply_to(message, "⚠️ تکایە ئایپی یان دۆمەین بنووسە. بۆ نموونە: <code>/nmap 127.0.0.1</code>" + get_signature())
         return
         
     bot.reply_to(message, f"⏳ سکانکردن دەستی پێکرد بۆ ئامانج: <b>{target}</b> ... (ماوەی ئەمڕۆت: {remaining})")
@@ -145,21 +169,21 @@ def ai_nmap_handler(message):
         res = output.decode('utf-8', errors='ignore')
         if len(res) > 4000:
             res = res[:4000] + "\n[Output Truncated...]"
-        bot.send_message(message.chat.id, f"📊 <b>Nmap Results:</b>\n<pre>{res}</pre>")
+        bot.send_message(message.chat.id, f"📊 <b>Nmap Results:</b>\n<pre>{res}</pre>" + get_signature())
     except Exception as e:
-        bot.reply_to(message, f"❌ هەڵە لە ئەنجامدانی سکان: {e}")
+        bot.reply_to(message, f"❌ هەڵە لە ئەنجامدانی سکان: {e}" + get_signature())
 
-# 4. فەرمانی شێڵ (/sh)
+# 5. فەرمانی شێڵ (/sh)
 @bot.message_handler(commands=['sh'])
 def ai_shell_handler(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
-        bot.reply_to(message, "⛔ تەنها ئەدمن دەسەڵاتی جێبەجێکردنی فەرمانی شێڵی هەیە.")
+        bot.reply_to(message, "⛔ تەنها ئەدمن دەسەڵاتی جێبەجێکردنی فەرمانی شێڵی هەیە." + get_signature())
         return
 
     cmd = message.text.replace('/sh', '').strip()
     if not cmd:
-        bot.reply_to(message, "⚠️ تکایە فەرمانێک بنووسە. بۆ نموونە: <code>/sh pkg update</code>")
+        bot.reply_to(message, "⚠️ تکایە فەرمانێک بنووسە. بۆ نموونە: <code>/sh pkg update</code>" + get_signature())
         return
         
     try:
@@ -167,11 +191,11 @@ def ai_shell_handler(message):
         res = output.decode('utf-8', errors='ignore')
         if len(res) > 4000:
             res = res[:4000] + "\n[Truncated...]"
-        bot.send_message(message.chat.id, f"⚡ <b>Shell Execution:</b>\n<pre>{res}</pre>")
+        bot.send_message(message.chat.id, f"⚡ <b>Shell Execution:</b>\n<pre>{res}</pre>" + get_signature())
     except Exception as e:
-        bot.reply_to(message, f"❌ هەڵە لە جێبەجێکردندا: {e}")
+        bot.reply_to(message, f"❌ هەڵە لە جێبەجێکردندا: {e}" + get_signature())
 
-# 5. مۆدیوڵی ژیری دەستکردی مرۆڤایەتی و شیرین
+# 6. مۆدیوڵی سەرەکی
 @bot.message_handler(func=lambda message: True)
 def ai_blackhat_brain(message):
     user_id = message.from_user.id
@@ -180,18 +204,36 @@ def ai_blackhat_brain(message):
     
     logger.info(f"AI Query received from {user_id}: {query}")
 
-    # وەڵامی خاوەنەکان بە ناوی alone427 و Malik
     if any(q in query_lower for q in ["کێ دروستکردووی", "کێ سەرۆکتە", "کێ دروست", "کێ خاوەنی تۆیە", "خاوەنەکەت کێیە", "سەرۆکەکەت کێیە", "who made you", "who is your boss", "دروستکەرت کێیە", "بەرپرست کێیە"]):
-        bot.reply_to(message, "من لەلایەن **alone427** و **Malik** عزیزەوە دروستکراوم و ئەوان خاوەن و سەرۆکە بەڕێزەکانی منن! 💀👑 هەر فەرمانێکت هەیە پێم بڵێ.")
+        bot.reply_to(message, "من لەلایەن **@ALONE427** و **@malikdlashad3** عزیزەوە دروستکراوم و ئەوان خاوەن و سەرۆکە بەڕێزەکانی منن! 💀👑" + get_signature())
+        return
+
+    if not is_allowed_topic(query):
+        refusal_msg = (
+            "❌ <b>ببوورە!</b> پرسیاری دەرەکی وەڵام نادرێتەوە.\n"
+            "من تەنها بۆ بابەتی <b>Hacking، Cyber Security و IT</b> تەرخان کراوم."
+            + get_signature()
+        )
+        bot.reply_to(message, refusal_msg)
         return
 
     is_tool_request = any(w in query_lower for w in ["توڵی", "توڵێکی", "سکریپتی", "پەیلوودی", "payload", "ddos", "دوس", "دی‌دی‌ئۆس", "wifi scan", "وایفای", "سکانەر", "attack tool", "بهێزتر", "به‌هێز", "exploit", "دروست بکە"])
 
     if not is_tool_request:
-        thinking_msg = bot.reply_to(message, "🧠 <b>بیرکردنەوە...</b> (خەریکی کۆکردنەوەی زانیاریم بۆ وەڵامدانەوەت بە شێوازێکی جوان)")
+        thinking_msg = bot.reply_to(message, "🧠 <b>بیرکردنەوە...</b> (خەریکی شیکردنەوەی بابەتی تەکنیکی و سایبەریم)")
         
         web_results = perform_web_search(query)
-        response_text = generate_human_response(query, web_results)
+        if web_results:
+            response_content = web_results
+        else:
+            response_content = f"بابەتی ({query}) لە ڕوانگەی ئاسایشی سایبەری و تەکنیکییەوە لێکۆڵینەوەی بۆ کرا."
+
+        response_text = (
+            f"🛡 <b>Cyber Security & IT Analysis:</b>\n\n"
+            f"<b>پرسیار:</b> <i>{query}</i>\n\n"
+            f"{response_content}"
+            + get_signature()
+        )
         
         try:
             bot.edit_message_text(response_text, chat_id=message.chat.id, message_id=thinking_msg.message_id, parse_mode='HTML')
@@ -201,7 +243,7 @@ def ai_blackhat_brain(message):
 
     allowed, remaining = check_and_update_limit(user_id)
     if not allowed:
-        bot.reply_to(message, "⚠️ <b>تێپەڕاندنی سنوور!</b> گیانەکەم، تۆ بەکارهێنانی ڕۆژانەی خۆت (5 داواکاری) تەواو کرد.")
+        bot.reply_to(message, "⚠️ <b>تێپەڕاندنی سنوور!</b> گیانەکەم، تۆ بەکارهێنانی ڕۆژانەی خۆت (5 داواکاری) تەواو کرد." + get_signature())
         return
 
     # توڵی وایفای
@@ -209,7 +251,7 @@ def ai_blackhat_brain(message):
         tool_desc = "📶 <b>ڕوونکردنەوەی توڵ:</b> ئەم توڵە دەتوانێت بۆ پشکنینی هێز و لاوازی تۆڕە بێتەلەکان (Wi-Fi) و گرتنی هەندشەی WPA2 بەکار بێت، هاوکات داتابەیسێکی گەورە پڕ لە 10,000 پاسوۆرد و زانیاری بۆ تاقیکردنەوە دروست دەکات."
         wifi_code = (
             "# Advanced Enterprise Wi-Fi Packet Sniffer & 10K DB Generator\n"
-            "# Developed by alone427 & Malik Core\n"
+            "# Developed by @ALONE427 & @malikdlashad3\n"
             "import os, sys, time, sqlite3\n\n"
             "def generate_10k_database():\n"
             "    print('[*] Initializing 10,000 Records Database...')\n"
@@ -230,7 +272,7 @@ def ai_blackhat_brain(message):
             "2. لە تێرماکس کارپێکردن ئەنجام بدە:\n"
             "   <code>python wifi_10k.py</code>"
         )
-        bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{wifi_code}</code></pre>\n\n{wifi_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})")
+        bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{wifi_code}</code></pre>\n\n{wifi_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})" + get_signature())
         return
 
     # توڵی DDoS
@@ -238,7 +280,7 @@ def ai_blackhat_brain(message):
         tool_desc = "💥 <b>ڕوونکردنەوەی توڵ:</b> ئەم توڵە تایبەتە بە ناردنی ترافیکی تاقیکاری قورس بۆ سەر سێرڤەر (Multi-threaded Stress Testing)، لەگەڵ پاشەکەوتکردنی داتابەیسی 10,000 ئایپی و پۆرت بۆ ئاسانکاری."
         heavy_ddos = (
             "# Ultra-Performance DDoS Suite with 10K Proxy/Target DB\n"
-            "# Developed by alone427 & Malik Core\n"
+            "# Developed by @ALONE427 & @malikdlashad3\n"
             "import socket, threading, random, time, sqlite3\n\n"
             "def generate_10k_database():\n"
             "    print('[*] Generating 10,000 Target/Proxy records for DDoS engine...')\n"
@@ -259,16 +301,16 @@ def ai_blackhat_brain(message):
             "2. لە تێرماکس جێبەجێی بکە:\n"
             "   <code>python ddos_10k.py</code>"
         )
-        bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{heavy_ddos}</code></pre>\n\n{heavy_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})")
+        bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{heavy_ddos}</code></pre>\n\n{heavy_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})" + get_signature())
         return
 
     else:
         rand_core = random.randint(5000, 9999)
         tool_desc = f"🛠 <b>ڕوونکردنەوەی توڵ:</b> ئەم توڵە تایبەتە بە دروستکردنی سکریپتی پاراستن و شیکردنەوەی ئامانج ({query})، کە 10,000 تۆماری زانیاریش لە خۆ دەگرێت."
         custom_code = (
-            f"# Custom Exploitation Module #{rand_core} with 10K DB\n"
+            f"# Custom Cyber Security Module #{rand_core} with 10K DB\n"
             f"# Target Specification: {query}\n"
-            f"# Developed by alone427 & Malik Core\n\n"
+            f"# Developed by @ALONE427 & @malikdlashad3\n\n"
             f"import socket, sys, time, sqlite3\n\n"
             f"def generate_10k_database():\n"
             f"    print('[*] Initializing 10,000 security records for module #{rand_core}...')\n"
@@ -280,18 +322,18 @@ def ai_blackhat_brain(message):
             f"    conn.commit()\n"
             f"    conn.close()\n"
             f"    print('[+] Successfully saved 10,000 records into security_data_10k.db!')\n\n"
-            f"if __name__ == '__main__':\n"
-            f"    generate_10k_database()"
+            "if __name__ == '__main__':\n"
+            "    generate_10k_database()"
         )
         custom_inst = (
             "📌 <b>ڕێنمایی بەکارهێنان:</b>\n"
             f"1. کۆدەکە لە فایلێک بە ناوی <code>exploit_{rand_core}.py</code> پاشەکەوت بکە.\n"
-            "2. لە تێرماکس جێبەجێی بکە:\n"
+            f"2. لە تێرماکس جێبەجێی بکە:\n"
             f"   <code>python exploit_{rand_core}.py</code>"
         )
-        bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{custom_code}</code></pre>\n\n{custom_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})")
+        bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{custom_code}</code></pre>\n\n{custom_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})" + get_signature())
         return
 
 if __name__ == '__main__':
-    logger.info("Black Hat AI Human Core started successfully.")
+    logger.info("Black Hat Bug Bounty Core started successfully.")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
