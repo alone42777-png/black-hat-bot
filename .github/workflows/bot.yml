@@ -1,21 +1,29 @@
 name: Run Black Hat Bot
+
 on:
   schedule:
-    - cron: "0 */6 * * *"  # هەر ٦ کاتژمێر جارێک
+    - cron: '*/5 * * * *' # هەموو 5 خولەک جارێک کار دەکاتەوە
   workflow_dispatch:
-
-concurrency:
-  group: telegram-bot
-  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 355  # کەمێک کەمتر لە ٦ کاتژمێر
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-      - run: pip install pyTelegramBotAPI
-      - run: python bot.py
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ADMIN_ID: ${{ secrets.ADMIN_ID }}
+        run: |
+          python bot.py
