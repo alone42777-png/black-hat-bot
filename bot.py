@@ -544,3 +544,7 @@ def handle_text(message):
         return
 
     if not is_allowed(q):
+        bot.reply_to(message, "❌ تەنها بابەتی <b>Hacking، Cyber Security، IT، پڕۆگرامسازی</b> وەڵام دەدرێتەوە.")
+        return
+
+    if any(w in ql for w in ("web", "وێب
