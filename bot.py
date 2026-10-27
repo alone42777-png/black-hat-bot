@@ -8,7 +8,6 @@ import threading
 import urllib.parse
 import urllib.request
 import re
-import time
 from datetime import datetime, timedelta
 
 import telebot
@@ -260,7 +259,7 @@ def cmd_panel(message):
     bot_status = get_bot_status()
     
     text = (
-        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v52.0</b> 👑\n\n"
+        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v53.0</b> 👑\n\n"
         f"👤 کۆی بەکارهێنەران: <b>{total_users}</b>\n"
         f"🎁 کۆدی خەڵات: <b>{total_codes}</b> (بەکارهاتوو: {used_codes})\n"
         f"⚙️ دۆخی بۆت: <b>{'✅ کارا' if bot_status == 'on' else '❌ ناچالاک'}</b>\n\n"
@@ -462,7 +461,7 @@ def cmd_start(message):
     if banned and message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, f"🚫 تۆ بلۆککراویت. کاتی کردنەوە: {until}")
         return
-    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v52.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
+    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v53.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
@@ -545,7 +544,3 @@ def handle_text(message):
             bot.reply_to(message, "❓ زمان نەناسرا. تکایە بنووسە: HTML، CSS، JS، PHP، Python یان React.")
             return
         clear_state(uid)
-        code = _web_template(found_lang)
-        safe_code = html.escape(code)
-        
-        # ئەمە ئەو دێڕەیە کە پێشتر لە کۆپیکردنەکەتدا ناتەواو مابووەوە
