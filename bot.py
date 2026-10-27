@@ -107,7 +107,6 @@ def check_ban(uid):
             return False, None
         return True, ban_until
     except ValueError:
-        # ئەگەر کاتەکە هەڵە بوو، بلۆکەکە لادەبەرە
         db().execute("UPDATE users SET is_banned=0, ban_until=NULL WHERE user_id=?", (uid,))
         db().commit()
         return False, None
@@ -247,7 +246,7 @@ def make_professional_response(query, snippets):
     return f"🛡 <b>شیکاری ئاسایش و پڕۆگرامسازی:</b>\n\n<i>{intro}</i>\n\n{body}"
 
 # ==========================================
-# 4. پەنێلی ئەدمین (بە دەق)
+# 4. پەنێلی ئەدمین
 # ==========================================
 @bot.message_handler(commands=["panel"])
 def cmd_panel(message):
@@ -524,4 +523,25 @@ def handle_text(message):
     if state == "wait_lang":
         found_lang = None
         for k, v in LANG_MAP.items():
-            if
+            if re.search(rf'\b{k}\b', ql):
+                found_lang = v
+                break
+        if not found_lang:
+            bot.reply_to(message, "❓ زمان نەناسرا. تکایە بنووسە: HTML، CSS، JS، PHP، Python یان React.")
+            return
+        clear_state(uid)
+        code = _web_template(found_lang)
+        safe_code = html.escape(code)
+        bot.reply_to(message, f"✨ <b>کۆد بۆ {found_lang} ئامادەیە:</b>\n<pre><code>{safe_code}</code></pre>")
+        return
+
+    if any(k in ql for k in ("کێ دروست", "who made you", "خاوەنی تۆ")):
+        bot.reply_to(message, "من لەلایەن @ALONE427 و @malikdlashad3 ـەوە دروستکراوم. 👑")
+        return
+        
+    if any(k in ql for k in ("سڵاو", "hello", "hi", "hey")):
+        bot.reply_to(message, "سڵاو بەخێربێیت بۆ سیستەمی ئاسایش و پڕۆگرامسازی. 🌐\nچۆن دەتوانم یارمەتیت بدەم لەم بوارەدا؟" + get_signature())
+        return
+
+    if not is_allowed(q):
+        bot.reply_to(message, "
