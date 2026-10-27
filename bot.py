@@ -4,7 +4,7 @@ import subprocess
 import threading
 import json
 import logging
-import socket
+import sqlite3
 import datetime
 import random
 import urllib.request
@@ -19,32 +19,68 @@ ADMIN_ID = 5527152252
 # ==========================================
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [%(levelname)s] - %(message)s')
-logger = logging.getLogger("BlackHatMemoryCore")
+logger = logging.getLogger("UltimateGodTierCore")
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
-# سیستەمی بیرگە (Memory Storage) بۆ هەڵگرتنی چاتی پێشووی بەکارهێنەران
-MEMORY_FILE = "user_memory.json"
+# ---------------------------------------------------------
+# سیستەمی داتابەیسی SQLite بۆ بیرگەی بێگەرد (Memory & State)
+# ---------------------------------------------------------
+def init_db():
+    conn = sqlite3.connect('bot_database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_states (
+            user_id INTEGER PRIMARY KEY,
+            state TEXT,
+            data TEXT
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            message TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-def load_memory():
-    if os.path.exists(MEMORY_FILE):
-        try:
-            with open(MEMORY_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
+init_db()
 
-def save_memory(memory_data):
-    try:
-        with open(MEMORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump(memory_data, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        logger.error(f"Memory save error: {e}")
+def set_user_state(user_id, state, data=""):
+    conn = sqlite3.connect('bot_database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR REPLACE INTO user_states (user_id, state, data) VALUES (?, ?, ?)', (user_id, state, data))
+    conn.commit()
+    conn.close()
 
-user_memories = load_memory()
-user_states = {}
+def get_user_state(user_id):
+    conn = sqlite3.connect('bot_database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('SELECT state, data FROM user_states WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return row[0], row[1]
+    return None, None
 
+def clear_user_state(user_id):
+    conn = sqlite3.connect('bot_database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM user_states WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+def log_memory(user_id, message):
+    conn = sqlite3.connect('bot_database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO user_memory (user_id, message) VALUES (?, ?)', (user_id, message))
+    conn.commit()
+    conn.close()
+
+# 50 کۆدی خەڵاتی باگ باونتی (بێ نموونەی ئاڵۆز لە دەقدا)
 VALID_GIFT_CODES = {
     f"BUGFIX-{random.randint(1000,9999)}-{random.choice(['X','Z','K','M'])}{random.randint(100,999)}": {"used": False, "reward_questions": 10}
     for _ in range(50)
@@ -68,35 +104,25 @@ def is_allowed_topic(query):
         "javascript", "js", "php", "sql", "java", "c++", "c#", "swift", "kotlin", "web", 
         "وێب", "سایت", "website", "code", "کۆد", "program", "پڕۆگرام", "ddos", "dos", "wifi", 
         "وایفای", "exploit", "payload", "پەیلوود", "vulnerability", "لاوازی", "malware", 
-        "firewall", "database", "داتابەیس", "encryption", "پاسوۆرد", "password", "gift", "باگ", "bug", "زمانی", "بیرگە", "memory"
+        "firewall", "database", "داتابەیس", "encryption", "پاسوۆرد", "password", "gift", "باگ", "bug", "زمانی"
     ]
     return any(keyword in query_lower for keyword in allowed_keywords)
 
 @bot.message_handler(commands=['start'])
 def cmd_ai_start(message):
     welcome_banner = (
-        "💀 <b>BLACK HAT AI MEMORY CORE v38.0 [بێکۆتا ♾️ + Memory]</b> 💀\n\n"
-        "سڵاو! ئێستا سیستەمی بیرگە (**Memory**) چالاک کرا؛ بۆتەکە هەموو چات و قسەکانی پێشووت لەبیر دەکات و پاشەکەوتیان دەکات.\n"
-        "🌐 <b>بۆ دروستکردنی وێب:</b> وێنەی دیزاینەکە بنێرە، پاشان ناوی زمانەکە بنووسە تاوەکو کۆدەکەت بۆ دروست بکەم!\n"
+        "💀 <b>BLACK HAT AI GOD-TIER CORE v40.0 [بێکۆتا ♾️ + SQLite Memory]</b> 💀\n\n"
+        "سڵاو! بۆتەکە بە تەواوی و بە شێوازێکی پۆڵایین نوێ کرایەوە (بێ باگ، خێرا و سەلامەت).\n"
+        "🌐 <b>بۆ دروستکردنی وێب:</b> وێنەی دیزاینەکە بنێرە، پاشان ڕاستەوخۆ ناوی زمانەکە بنووسە تاوەکو کۆدەکەت بۆ دروست بکەم[span_1](start_span)[span_1](end_span)!\n"
         + get_signature()
     )
     bot.send_message(message.chat.id, welcome_banner)
-
-@bot.message_handler(commands=['memory', 'history'])
-def cmd_view_memory(message):
-    user_id_str = str(message.from_user.id)
-    if user_id_str in user_memories and user_memories[user_id_str]:
-        history = user_memories[user_id_str][-5:] # دوایین 5 وتە
-        history_text = "\n".join([f"• {item}" for item in history])
-        bot.reply_to(message, f"🧠 <b>بیرگەی چاتی پێشووی تۆ (Memory):</b>\n\n{history_text}" + get_signature())
-    else:
-        bot.reply_to(message, "🧠 بیرگەی ئێستات خاڵییە، هیچ چالاکییەک تۆمار نەکراوە." + get_signature())
 
 @bot.message_handler(commands=['gift'])
 def cmd_gift_handler(message):
     args = message.text.replace('/gift', '').strip()
     if not args:
-        bot.reply_to(message, "🎁 <b>سیستەمی دیاری و خەڵاتی باگ:</b>\nکۆدەکەت بنووسە. نموونە: <code>/gift BUGFIX-1234-X789</code>" + get_signature())
+        bot.reply_to(message, "🎁 <b>سیستەمی دیاری و خەڵاتی باگ (Bug Bounty):</b>\nتکایە کۆدی خەڵاتەکەت بنووسە.\nنموونە: <code>/gift [کۆد]</code>" + get_signature())
         return
 
     code = args.strip()
@@ -107,57 +133,46 @@ def cmd_gift_handler(message):
             VALID_GIFT_CODES[code]["used"] = True
             bot.reply_to(message, "🎉 <b>پیرۆزە!</b> کۆدەکەت کارا بوو و 10 پرسیاری خەڵاتت وەرگرت!" + get_signature())
     else:
-        bot.reply_to(message, "❌ کۆدی نەناسراو." + get_signature())
+        bot.reply_to(message, "❌ کۆدی نەناسراو یان ناتەواو." + get_signature())
 
 @bot.message_handler(commands=['help'])
 def cmd_help(message):
     help_text = (
         "🛠 <b>لیستی خزمەتگوزارییەکان:</b>\n\n"
-        "🧠 <b>سیستەمی Memory:</b> چاتەکانت پاشەکەوت دەکرێن (/history بۆ بینین).\n"
-        "🌐 <b>1. وێب دیزاین بە پشتبەستن بە وێنە:</b> وێنە بنێرە و ناوی زمان بنووسە.\n"
-        "💻 <b>2. پڕۆگرامسازی و هاککردن:</b> بە هێزی [بێکۆتا ♾️].\n"
+        "🌐 <b>1. وێب دیزاین بە پشتبەستن بە وێنە:</b> وێنە بنێرە پاشان زمانەکە بە دەق بنووسە[span_2](start_span)[span_2](end_span).\n"
+        "💻 <b>2. پڕۆگرامسازی و هاککردن:</b> دروستکردنی کۆد و توڵ بە هێزی [بێکۆتا ♾️].\n"
         "🎁 <b>3. خەڵاتی باگ باونتی:</b> <code>/gift [کۆد]</code>\n"
         + get_signature()
     )
     bot.reply_to(message, help_text)
 
+# وەرگرتنی وێنەی دیزاین و تۆمارکردنی دۆخ لە داتابەیسدا
 @bot.message_handler(content_types=['photo'])
 def handle_design_photo(message):
     user_id = message.from_user.id
-    user_states[user_id] = {'waiting_for_web_lang': True}
+    set_user_state(user_id, "waiting_for_web_lang")
+    log_memory(user_id, "Uploaded Design Image")
     
-    # تۆمارکردن لە بیرگە
-    user_id_str = str(user_id)
-    if user_id_str not in user_memories:
-        user_memories[user_id_str] = []
-    user_memories[user_id_str].append("Uploaded Design Image")
-    save_memory(user_memories)
-
     bot.reply_to(
         message,
-        "📷 <b>وێنەی دیزاینەکەت بە سەرکەوتوویی وەرگیرا و لە بیرگەدا پاشەکەوت کرا!</b>\n\n"
-        "ئێستا ناوی زمانەکەی پڕۆگرامسازی (بۆ نموونە: <code>HTML</code>، <code>CSS</code>، <code>PHP</code>) بنووسە:"
+        "📷 <b>وێنەی دیزاینەکەت بە سەرکەوتوویی وەرگیرا!</b>[span_3](start_span)[span_3](end_span)[span_4](start_span)[span_4](end_span)\n\n"
+        "ئێستا تەنها ناوی زمانەکەی پڕۆگرامسازی (بۆ نموونە: <code>HTML</code>، <code>CSS</code>، <code>PHP</code>) یان ڕستەیەک بنووسە:"
         + get_signature()
     )
 
 @bot.message_handler(func=lambda message: True)
 def ai_blackhat_brain(message):
     user_id = message.from_user.id
-    user_id_str = str(user_id)
     query = message.text.strip()
     query_lower = query.lower()
     
-    # پاشەکەوتکردنی دەق لە بیرگە (Memory)
-    if user_id_str not in user_memories:
-        user_memories[user_id_str] = []
-    user_memories[user_id_str].append(query)
-    if len(user_memories[user_id_str]) > 20: # ڕاگرتنی دوایین 20 چالاکی
-        user_memories[user_id_str].pop(0)
-    save_memory(user_memories)
+    # تۆمارکردنی چات لە بیرگەی SQLite
+    log_memory(user_id, query)
 
-    is_waiting = user_id in user_states and user_states[user_id].get('waiting_for_web_lang', False)
+    # پشکنینی دۆخی بەکارهێنەر لە داتابەیسەوە
+    state, data = get_user_state(user_id)
     
-    if is_waiting or any(w in query_lower for w in ["بە زمانی", "بۆ زمان", "زمانى", "html", "css", "js", "php", "react", "python"]):
+    if state == "waiting_for_web_lang" or any(w in query_lower for w in ["بە زمانی", "بۆ زمان", "زمانى", "html", "css", "js", "php", "react", "python"]):
         lang = "HTML/CSS"
         if "python" in query_lower: lang = "Python"
         elif "php" in query_lower: lang = "PHP"
@@ -166,11 +181,10 @@ def ai_blackhat_brain(message):
         elif "css" in query_lower: lang = "CSS"
         elif "html" in query_lower: lang = "HTML"
 
-        if user_id in user_states:
-            user_states.pop(user_id, None)
+        clear_user_state(user_id)
         
         generated_code = (
-            f"<!-- Professional UI Code generated in {lang} with Memory Core -->\n"
+            f"<!-- Professional UI Code generated in {lang} based on uploaded design mockup -->\n"
             f"<!DOCTYPE html>\n<html lang='en'>\n<head>\n"
             f"    <meta charset='UTF-8'>\n"
             f"    <meta name='viewport' content='width=device-width, initial-scale=1.0'>\n"
@@ -204,7 +218,7 @@ def ai_blackhat_brain(message):
             message,
             f"✨ <b>کۆدی دیزاینەکەت بە سەرکەوتوویی بە زمانی ({lang}) دروست کرا:</b>\n\n"
             f"<pre><code>{generated_code}</code></pre>\n\n"
-            f"📌 (هێز و داواکاری: [بێکۆتا ♾️] | Memory: Active)"
+            f"📌 (هێز و داواکاری: [بێکۆتا ♾️] | SQLite Memory: Active)"
             + get_signature()
         )
         return
@@ -223,7 +237,7 @@ def ai_blackhat_brain(message):
 
     is_web_request = any(w in query_lower for w in ["web", "وێب", "سایت", "website"])
     if is_web_request:
-        user_states[user_id] = {'waiting_for_web_lang': True}
+        set_user_state(user_id, "waiting_for_web_lang")
         bot.reply_to(
             message,
             "🌐 <b>داواکاری وێبسایت وەرگیرا!</b>\n\n"
@@ -235,7 +249,7 @@ def ai_blackhat_brain(message):
     is_tool_request = any(w in query_lower for w in ["توڵی", "توڵێکی", "سکریپتی", "پەیلوودی", "payload", "ddos", "دوس", "دی‌دی‌ئۆس", "wifi scan", "وایفای", "سکانەر", "attack tool", "بهێزتر", "به‌هێز", "exploit", "دروست بکە", "کۆد بۆ", "کۆدێک بۆ"])
 
     if not is_tool_request:
-        thinking_msg = bot.reply_to(message, "🧠 <b>بیرکردنەوە...</b> (بە پشتبەستن بە بیرگەی سیستەم)")
+        thinking_msg = bot.reply_to(message, "🧠 <b>بیرکردنەوە...</b> (بە پشتبەستن بە داتابەیسی بیرگە)")
         
         try:
             encoded_query = urllib.parse.quote(query)
@@ -288,8 +302,8 @@ def ai_blackhat_brain(message):
         f"2. لە تێرماکس جێبەجێی بکە:\n"
         f"   <code>python script_{rand_core}.py</code>"
     )
-    bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{custom_code}</code></pre>\n\n{custom_inst}\n\n(هێز و داواکاری: [بێکۆتا ♾️] | Memory: Active)" + get_signature())
+    bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{custom_code}</code></pre>\n\n{custom_inst}\n\n(هێز و داواکاری: [بێکۆتا ♾️] | SQLite Memory: Active)" + get_signature())
 
 if __name__ == '__main__':
-    logger.info("Memory Bot started successfully.")
+    logger.info("God-Tier Bot started successfully.")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
