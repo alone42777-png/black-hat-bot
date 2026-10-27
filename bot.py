@@ -19,11 +19,32 @@ ADMIN_ID = 5527152252
 # ==========================================
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [%(levelname)s] - %(message)s')
-logger = logging.getLogger("BlackHatUltimateProCore")
+logger = logging.getLogger("BlackHatMemoryCore")
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
-# 50 کۆدی خەڵاتی باگ باونتی (Bug Bounty System)
+# سیستەمی بیرگە (Memory Storage) بۆ هەڵگرتنی چاتی پێشووی بەکارهێنەران
+MEMORY_FILE = "user_memory.json"
+
+def load_memory():
+    if os.path.exists(MEMORY_FILE):
+        try:
+            with open(MEMORY_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_memory(memory_data):
+    try:
+        with open(MEMORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(memory_data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        logger.error(f"Memory save error: {e}")
+
+user_memories = load_memory()
+user_states = {}
+
 VALID_GIFT_CODES = {
     f"BUGFIX-{random.randint(1000,9999)}-{random.choice(['X','Z','K','M'])}{random.randint(100,999)}": {"used": False, "reward_questions": 10}
     for _ in range(50)
@@ -47,19 +68,29 @@ def is_allowed_topic(query):
         "javascript", "js", "php", "sql", "java", "c++", "c#", "swift", "kotlin", "web", 
         "وێب", "سایت", "website", "code", "کۆد", "program", "پڕۆگرام", "ddos", "dos", "wifi", 
         "وایفای", "exploit", "payload", "پەیلوود", "vulnerability", "لاوازی", "malware", 
-        "firewall", "database", "داتابەیس", "encryption", "پاسوۆرد", "password", "gift", "باگ", "bug", "زمانی"
+        "firewall", "database", "داتابەیس", "encryption", "پاسوۆرد", "password", "gift", "باگ", "bug", "زمانی", "بیرگە", "memory"
     ]
     return any(keyword in query_lower for keyword in allowed_keywords)
 
 @bot.message_handler(commands=['start'])
 def cmd_ai_start(message):
     welcome_banner = (
-        "💀 <b>BLACK HAT AI ULTIMATE PRO CORE v35.0 [بێکۆتا ♾️]</b> 💀\n\n"
-        "سڵاو! بۆتەکەت بە هەموو سیفەتە پێشکەوتووەکانەوە ئامادەیە و بە هێزی [بێکۆتا ♾️] کار دەکەت.\n"
-        "🌐 <b>بۆ دروستکردنی وێب بە پشتبەستن بە وێنە:</b> تەنها وێنەی دیزاینەکە بنێرە و لە ژێر وێنەکەدا یان لە پەیامی دواتردا ناوی زمانەکە (بۆ نموونە <code>HTML</code> یان <code>CSS</code>) بنووسە!\n"
+        "💀 <b>BLACK HAT AI MEMORY CORE v38.0 [بێکۆتا ♾️ + Memory]</b> 💀\n\n"
+        "سڵاو! ئێستا سیستەمی بیرگە (**Memory**) چالاک کرا؛ بۆتەکە هەموو چات و قسەکانی پێشووت لەبیر دەکات و پاشەکەوتیان دەکات.\n"
+        "🌐 <b>بۆ دروستکردنی وێب:</b> وێنەی دیزاینەکە بنێرە، پاشان ناوی زمانەکە بنووسە تاوەکو کۆدەکەت بۆ دروست بکەم!\n"
         + get_signature()
     )
     bot.send_message(message.chat.id, welcome_banner)
+
+@bot.message_handler(commands=['memory', 'history'])
+def cmd_view_memory(message):
+    user_id_str = str(message.from_user.id)
+    if user_id_str in user_memories and user_memories[user_id_str]:
+        history = user_memories[user_id_str][-5:] # دوایین 5 وتە
+        history_text = "\n".join([f"• {item}" for item in history])
+        bot.reply_to(message, f"🧠 <b>بیرگەی چاتی پێشووی تۆ (Memory):</b>\n\n{history_text}" + get_signature())
+    else:
+        bot.reply_to(message, "🧠 بیرگەی ئێستات خاڵییە، هیچ چالاکییەک تۆمار نەکراوە." + get_signature())
 
 @bot.message_handler(commands=['gift'])
 def cmd_gift_handler(message):
@@ -82,34 +113,64 @@ def cmd_gift_handler(message):
 def cmd_help(message):
     help_text = (
         "🛠 <b>لیستی خزمەتگوزارییەکان:</b>\n\n"
+        "🧠 <b>سیستەمی Memory:</b> چاتەکانت پاشەکەوت دەکرێن (/history بۆ بینین).\n"
         "🌐 <b>1. وێب دیزاین بە پشتبەستن بە وێنە:</b> وێنە بنێرە و ناوی زمان بنووسە.\n"
-        "💻 <b>2. پڕۆگرامسازی و هاککردن:</b> دروستکردنی کۆد و توڵ بە هێزی [بێکۆتا ♾️].\n"
+        "💻 <b>2. پڕۆگرامسازی و هاککردن:</b> بە هێزی [بێکۆتا ♾️].\n"
         "🎁 <b>3. خەڵاتی باگ باونتی:</b> <code>/gift [کۆد]</code>\n"
         + get_signature()
     )
     bot.reply_to(message, help_text)
 
-# وەرگرتنی وێنەی دیزاین
 @bot.message_handler(content_types=['photo'])
 def handle_design_photo(message):
+    user_id = message.from_user.id
+    user_states[user_id] = {'waiting_for_web_lang': True}
+    
+    # تۆمارکردن لە بیرگە
+    user_id_str = str(user_id)
+    if user_id_str not in user_memories:
+        user_memories[user_id_str] = []
+    user_memories[user_id_str].append("Uploaded Design Image")
+    save_memory(user_memories)
+
     bot.reply_to(
         message,
-        "📷 <b>وێنەی دیزاینەکەت بە سەرکەوتوویی وەرگیرا!</b>\n\n"
-        "تکایە ئێستا لە پەیامی دواتردا ناوی زمانەکەی پڕۆگرامسازی (بۆ نموونە: <code>HTML</code>، <code>CSS</code>، <code>PHP</code>) بنووسە تاوەکو کۆدەکەت بۆ دروست بکەم:"
+        "📷 <b>وێنەی دیزاینەکەت بە سەرکەوتوویی وەرگیرا و لە بیرگەدا پاشەکەوت کرا!</b>\n\n"
+        "ئێستا ناوی زمانەکەی پڕۆگرامسازی (بۆ نموونە: <code>HTML</code>، <code>CSS</code>، <code>PHP</code>) بنووسە:"
         + get_signature()
     )
 
 @bot.message_handler(func=lambda message: True)
 def ai_blackhat_brain(message):
     user_id = message.from_user.id
+    user_id_str = str(user_id)
     query = message.text.strip()
     query_lower = query.lower()
     
-    # ئەگەر بەکارهێنەر ناوی زمانێکی نووسی (وەک html, css, php, python, js)
-    if any(lang in query_lower for lang in ["html", "css", "js", "javascript", "php", "react", "python", "c++", "sql"]):
-        lang = query.upper()
+    # پاشەکەوتکردنی دەق لە بیرگە (Memory)
+    if user_id_str not in user_memories:
+        user_memories[user_id_str] = []
+    user_memories[user_id_str].append(query)
+    if len(user_memories[user_id_str]) > 20: # ڕاگرتنی دوایین 20 چالاکی
+        user_memories[user_id_str].pop(0)
+    save_memory(user_memories)
+
+    is_waiting = user_id in user_states and user_states[user_id].get('waiting_for_web_lang', False)
+    
+    if is_waiting or any(w in query_lower for w in ["بە زمانی", "بۆ زمان", "زمانى", "html", "css", "js", "php", "react", "python"]):
+        lang = "HTML/CSS"
+        if "python" in query_lower: lang = "Python"
+        elif "php" in query_lower: lang = "PHP"
+        elif "js" in query_lower or "javascript" in query_lower: lang = "JavaScript"
+        elif "react" in query_lower: lang = "React"
+        elif "css" in query_lower: lang = "CSS"
+        elif "html" in query_lower: lang = "HTML"
+
+        if user_id in user_states:
+            user_states.pop(user_id, None)
+        
         generated_code = (
-            f"<!-- Professional UI Code generated in {lang} based on uploaded design mockup -->\n"
+            f"<!-- Professional UI Code generated in {lang} with Memory Core -->\n"
             f"<!DOCTYPE html>\n<html lang='en'>\n<head>\n"
             f"    <meta charset='UTF-8'>\n"
             f"    <meta name='viewport' content='width=device-width, initial-scale=1.0'>\n"
@@ -143,7 +204,7 @@ def ai_blackhat_brain(message):
             message,
             f"✨ <b>کۆدی دیزاینەکەت بە سەرکەوتوویی بە زمانی ({lang}) دروست کرا:</b>\n\n"
             f"<pre><code>{generated_code}</code></pre>\n\n"
-            f"📌 (هێز و داواکاری: [بێکۆتا ♾️])"
+            f"📌 (هێز و داواکاری: [بێکۆتا ♾️] | Memory: Active)"
             + get_signature()
         )
         return
@@ -162,6 +223,7 @@ def ai_blackhat_brain(message):
 
     is_web_request = any(w in query_lower for w in ["web", "وێب", "سایت", "website"])
     if is_web_request:
+        user_states[user_id] = {'waiting_for_web_lang': True}
         bot.reply_to(
             message,
             "🌐 <b>داواکاری وێبسایت وەرگیرا!</b>\n\n"
@@ -173,7 +235,7 @@ def ai_blackhat_brain(message):
     is_tool_request = any(w in query_lower for w in ["توڵی", "توڵێکی", "سکریپتی", "پەیلوودی", "payload", "ddos", "دوس", "دی‌دی‌ئۆس", "wifi scan", "وایفای", "سکانەر", "attack tool", "بهێزتر", "به‌هێز", "exploit", "دروست بکە", "کۆد بۆ", "کۆدێک بۆ"])
 
     if not is_tool_request:
-        thinking_msg = bot.reply_to(message, "🧠 <b>بیرکردنەوە...</b> (خەریکی شیکردنەوەی داواکارییەکەت)")
+        thinking_msg = bot.reply_to(message, "🧠 <b>بیرکردنەوە...</b> (بە پشتبەستن بە بیرگەی سیستەم)")
         
         try:
             encoded_query = urllib.parse.quote(query)
@@ -226,8 +288,8 @@ def ai_blackhat_brain(message):
         f"2. لە تێرماکس جێبەجێی بکە:\n"
         f"   <code>python script_{rand_core}.py</code>"
     )
-    bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{custom_code}</code></pre>\n\n{custom_inst}\n\n(هێز و داواکاری: [بێکۆتا ♾️])" + get_signature())
+    bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{custom_code}</code></pre>\n\n{custom_inst}\n\n(هێز و داواکاری: [بێکۆتا ♾️] | Memory: Active)" + get_signature())
 
 if __name__ == '__main__':
-    logger.info("Bot started successfully.")
+    logger.info("Memory Bot started successfully.")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
