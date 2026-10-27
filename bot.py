@@ -19,12 +19,11 @@ ADMIN_ID = 5527152252
 # ==========================================
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [%(levelname)s] - %(message)s')
-logger = logging.getLogger("BlackHatUltimateCore")
+logger = logging.getLogger("BlackHatUltimateProCore")
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
-user_states = {}
-
+# 50 کۆدی خەڵاتی باگ باونتی (Bug Bounty System)
 VALID_GIFT_CODES = {
     f"BUGFIX-{random.randint(1000,9999)}-{random.choice(['X','Z','K','M'])}{random.randint(100,999)}": {"used": False, "reward_questions": 10}
     for _ in range(50)
@@ -55,9 +54,9 @@ def is_allowed_topic(query):
 @bot.message_handler(commands=['start'])
 def cmd_ai_start(message):
     welcome_banner = (
-        "💀 <b>BLACK HAT AI ULTIMATE CORE v31.0 [بێکۆتا ♾️]</b> 💀\n\n"
-        "سڵاو! سیستەمەکە بە تەواوی و بە شێوازێکی زۆر پێشکەوتوو نوێ کرایەوە.\n"
-        "🌐 <b>بۆ دروستکردنی وێب:</b> سەرەتا وێنەی دیزاینەکە بنێرە، پاشان لە ڕێگەی دوگمەکانەوە زمانەکەی هەڵبژێرە تاوەکو کۆدەکەت بۆ دروست بکەم!\n"
+        "💀 <b>BLACK HAT AI ULTIMATE PRO CORE v35.0 [بێکۆتا ♾️]</b> 💀\n\n"
+        "سڵاو! بۆتەکەت بە هەموو سیفەتە پێشکەوتووەکانەوە ئامادەیە و بە هێزی [بێکۆتا ♾️] کار دەکەت.\n"
+        "🌐 <b>بۆ دروستکردنی وێب بە پشتبەستن بە وێنە:</b> تەنها وێنەی دیزاینەکە بنێرە و لە ژێر وێنەکەدا یان لە پەیامی دواتردا ناوی زمانەکە (بۆ نموونە <code>HTML</code> یان <code>CSS</code>) بنووسە!\n"
         + get_signature()
     )
     bot.send_message(message.chat.id, welcome_banner)
@@ -83,85 +82,21 @@ def cmd_gift_handler(message):
 def cmd_help(message):
     help_text = (
         "🛠 <b>لیستی خزمەتگوزارییەکان:</b>\n\n"
-        "🌐 <b>1. وێب دیزاین بە پشتبەستن بە وێنە:</b> وێنەی دیزاینەکە بنێرە و زمانەکە هەڵبژێرە.\n"
+        "🌐 <b>1. وێب دیزاین بە پشتبەستن بە وێنە:</b> وێنە بنێرە و ناوی زمان بنووسە.\n"
         "💻 <b>2. پڕۆگرامسازی و هاککردن:</b> دروستکردنی کۆد و توڵ بە هێزی [بێکۆتا ♾️].\n"
         "🎁 <b>3. خەڵاتی باگ باونتی:</b> <code>/gift [کۆد]</code>\n"
         + get_signature()
     )
     bot.reply_to(message, help_text)
 
-# وەرگرتنی وێنە و ناردنی دوگمەی هەڵبژاردنی زمان
+# وەرگرتنی وێنەی دیزاین
 @bot.message_handler(content_types=['photo'])
 def handle_design_photo(message):
-    user_id = message.from_user.id
-    user_states[user_id] = {'step': 'waiting_for_language'}
-    
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        types.InlineKeyboardButton("HTML / CSS", callback_data="lang_html"),
-        types.InlineKeyboardButton("JavaScript", callback_data="lang_js"),
-        types.InlineKeyboardButton("PHP", callback_data="lang_php"),
-        types.InlineKeyboardButton("React", callback_data="lang_react"),
-        types.InlineKeyboardButton("Python", callback_data="lang_python")
-    )
-    
     bot.reply_to(
         message,
         "📷 <b>وێنەی دیزاینەکەت بە سەرکەوتوویی وەرگیرا!</b>\n\n"
-        "تکایە لە خوارەوە **زمانەی پڕۆگرامسازی** هەڵبژێرە یان ناوی زمانەکە بنووسە:"
-        + get_signature(),
-        reply_markup=markup
-    )
-
-# مامەڵەکردن لەگەڵ دوگمە کراوەکان (Inline Callbacks)
-@bot.callback_query_handler(func=lambda call: call.data.startswith('lang_'))
-def callback_language(call):
-    user_id = call.from_user.id
-    lang = call.data.replace('lang_', '').upper()
-    
-    user_states.pop(user_id, None)
-    
-    generated_code = (
-        f"<!-- Professional UI Code generated in {lang} based on uploaded design mockup -->\n"
-        f"<!DOCTYPE html>\n<html lang='en'>\n<head>\n"
-        f"    <meta charset='UTF-8'>\n"
-        f"    <meta name='viewport' content='width=device-width, initial-scale=1.0'>\n"
-        f"    <title>Design Implementation - {lang}</title>\n"
-        f"    <style>\n"
-        f"        * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }}\n"
-        f"        body {{ background-color: #0d1117; color: #c9d1d9; display: flex; justify-content: center; align-items: center; height: 100vh; }}\n"
-        f"        .main-box {{ background: #161b22; width: 450px; padding: 40px; border-radius: 12px; border: 1px solid #30363d; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,0.8); }}\n"
-        f"        .nav-tabs {{ display: flex; justify-content: space-around; margin-bottom: 30px; border-bottom: 1px solid #30363d; padding-bottom: 10px; font-weight: bold; }}\n"
-        f"        .tab {{ color: #8b949e; cursor: pointer; }}\n"
-        f"        .tab.active {{ color: #58a6ff; border-bottom: 2px solid #58a6ff; padding-bottom: 5px; }}\n"
-        f"        .upload-area {{ background: #0b0f19; border: 2px dashed #30363d; padding: 40px 20px; border-radius: 8px; margin: 20px 0; }}\n"
-        f"        .btn {{ background: #238636; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; }}\n"
-        f"        .btn:hover {{ background: #2ea043; }}\n"
-        f"    </style>\n</head>\n<body>\n"
-        f"    <div class='main-box'>\n"
-        f"        <div class='nav-tabs'>\n"
-        f"            <span class='tab active'>FILE</span>\n"
-        f"            <span class='tab'>URL</span>\n"
-        f"            <span class='tab'>SEARCH</span>\n"
-        f"        </div>\n"
-        f"        <div class='upload-area'>\n"
-        f"            <p style='margin-bottom: 15px; color: #8b949e;'>🔒 Secure File Scanner UI ({lang})</p>\n"
-        f"            <button class='btn'>Choose file</button>\n"
-        f"        </div>\n"
-        f"    </div>\n"
-        f"</body>\n</html>"
-    )
-    
-    bot.edit_message_text(
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        text=(
-            f"✨ <b>کۆدی دیزاینەکەت بە سەرکەوتوویی بە زمانەی ({lang}) دروست کرا:</b>\n\n"
-            f"<pre><code>{generated_code}</code></pre>\n\n"
-            f"📌 (هێز و داواکاری: [بێکۆتا ♾️])"
-            + get_signature()
-        ),
-        parse_mode='HTML'
+        "تکایە ئێستا لە پەیامی دواتردا ناوی زمانەکەی پڕۆگرامسازی (بۆ نموونە: <code>HTML</code>، <code>CSS</code>، <code>PHP</code>) بنووسە تاوەکو کۆدەکەت بۆ دروست بکەم:"
+        + get_signature()
     )
 
 @bot.message_handler(func=lambda message: True)
@@ -170,10 +105,9 @@ def ai_blackhat_brain(message):
     query = message.text.strip()
     query_lower = query.lower()
     
-    if user_id in user_states and user_states[user_id].get('step') == 'waiting_for_language':
-        lang = query
-        user_states.pop(user_id, None)
-        
+    # ئەگەر بەکارهێنەر ناوی زمانێکی نووسی (وەک html, css, php, python, js)
+    if any(lang in query_lower for lang in ["html", "css", "js", "javascript", "php", "react", "python", "c++", "sql"]):
+        lang = query.upper()
         generated_code = (
             f"<!-- Professional UI Code generated in {lang} based on uploaded design mockup -->\n"
             f"<!DOCTYPE html>\n<html lang='en'>\n<head>\n"
@@ -207,7 +141,7 @@ def ai_blackhat_brain(message):
         
         bot.reply_to(
             message,
-            f"✨ <b>کۆدی دیزاینەکەت بە سەرکەوتوویی بە زمانەی ({lang}) دروست کرا:</b>\n\n"
+            f"✨ <b>کۆدی دیزاینەکەت بە سەرکەوتوویی بە زمانی ({lang}) دروست کرا:</b>\n\n"
             f"<pre><code>{generated_code}</code></pre>\n\n"
             f"📌 (هێز و داواکاری: [بێکۆتا ♾️])"
             + get_signature()
@@ -226,9 +160,8 @@ def ai_blackhat_brain(message):
         )
         return
 
-    is_web_request = any(w in query_lower for w in ["web", "وێب", "سایت", "website", "html", "css", "front-end"])
+    is_web_request = any(w in query_lower for w in ["web", "وێب", "سایت", "website"])
     if is_web_request:
-        user_states[user_id] = {'step': 'waiting_for_language'}
         bot.reply_to(
             message,
             "🌐 <b>داواکاری وێبسایت وەرگیرا!</b>\n\n"
