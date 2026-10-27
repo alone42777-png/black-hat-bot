@@ -547,4 +547,5 @@ def handle_text(message):
         clear_state(uid)
         code = _web_template(found_lang)
         safe_code = html.escape(code)
-        bot.reply_to(message, f"✨ <b>کۆد بۆ {found_lang} ئام
+        
+        # ئەمە ئەو دێڕەیە کە پێشتر لە کۆپیکردنەکەتدا ناتەواو مابووەوە
