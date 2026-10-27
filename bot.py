@@ -8,6 +8,7 @@ import threading
 import urllib.parse
 import urllib.request
 import re
+import requests
 from datetime import datetime, timedelta
 
 import telebot
@@ -17,6 +18,9 @@ from telebot import types
 TOKEN = "8613090176:AAFK1kyiIBhGp7CP5PE_4xahT-gW1gTsx5M"
 ADMIN_ID = 5527152252
 DB_PATH = "bot_database.db"
+
+# کلیلەکە لێرە داینرا
+AI_API_KEY = "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"
 # ==========================================
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
@@ -161,6 +165,10 @@ def remove_credit(user_id, n):
         return True
     return False
 
+def set_credit(user_id, n):
+    db().execute("INSERT INTO credit(user_id, questions_left) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET questions_left=?", (user_id, n, n))
+    db().commit()
+
 def spend_credit(user_id):
     return remove_credit(user_id, 1)
 
@@ -180,12 +188,12 @@ def redeem_gift(user_id, code):
     return True, "ok", row[1]
 
 # ==========================================
-# 3. یارمەتیدەر و گەڕان
+# 3. مێشکی زیرەک (AI Core)
 # ==========================================
 def get_signature():
     return (
         "\n\n───────────────────\n"
-        "🛡 <b>[BLACK HAT AI SECURITY CORE]</b>\n"
+        "🛡 <b>[BLACK HAT AI PRIME CORE]</b>\n"
         "🎁 بۆ بەکارهێنانی کۆدی خەڵات: <code>/gift [کۆد]</code>\n"
         "👑 <b>پەیوەندی:</b> @malikdlashad3 | @ALONE427"
     )
@@ -245,6 +253,41 @@ def make_professional_response(query, snippets):
     )
     return f"🛡 <b>شیکاری ئاسایش و پڕۆگرامسازی:</b>\n\n<i>{intro}</i>\n\n{body}"
 
+def get_prime_ai_response(query):
+    if not AI_API_KEY or len(AI_API_KEY) < 10:
+        snippets = _search_snippets(query)
+        return make_professional_response(query, snippets)
+
+    try:
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {AI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "llama3-70b-8192",
+            "messages": [
+                {"role": "system", "content": "You are BLACK HAT AI PRIME, an expert in cybersecurity, hacking, and programming. Answer professionally in Kurdish Sorani. Be direct, technical, and helpful. Do not use markdown code blocks unless necessary."},
+                {"role": "user", "content": query}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 1024
+        }
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        data = response.json()
+        
+        if 'choices' in data and len(data['choices']) > 0:
+            return data['choices'][0]['message']['content']
+        else:
+            logger.error(f"AI API Error: {data}")
+            snippets = _search_snippets(query)
+            return make_professional_response(query, snippets)
+            
+    except Exception as e:
+        logger.error(f"AI Connection Error: {e}")
+        snippets = _search_snippets(query)
+        return make_professional_response(query, snippets)
+
 # ==========================================
 # 4. پەنێلی ئەدمین
 # ==========================================
@@ -257,24 +300,32 @@ def cmd_panel(message):
     total_codes = db().execute("SELECT COUNT(*) FROM gift_codes").fetchone()[0]
     used_codes = db().execute("SELECT COUNT(*) FROM gift_codes WHERE used_by IS NOT NULL").fetchone()[0]
     bot_status = get_bot_status()
+    ai_status = "✅ چالاک" if AI_API_KEY else "❌ ناچالاک"
     
     text = (
-        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v49.0</b> 👑\n\n"
+        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v64.0</b> 👑\n\n"
         f"👤 کۆی بەکارهێنەران: <b>{total_users}</b>\n"
         f"🎁 کۆدی خەڵات: <b>{total_codes}</b> (بەکارهاتوو: {used_codes})\n"
-        f"⚙️ دۆخی بۆت: <b>{'✅ کارا' if bot_status == 'on' else '❌ ناچالاک'}</b>\n\n"
+        f"⚙️ دۆخی بۆت: <b>{'✅ کارا' if bot_status == 'on' else '❌ ناچالاک'}</b>\n"
+        f"🧠 مێشکی زیرەک: <b>{ai_status}</b>\n\n"
         f"📌 <b>فەرمانەکان:</b>\n\n"
         f"🔹 <code>/stats</code> — ئاماری سیستەم\n"
         f"🔹 <code>/members</code> — لیستی دوایین 50 ئەندام\n"
-        f"🔹 <code>/user [ID]</code> — بینینی زانیاری وردی بەکارهێنەر\n"
+        f"🔹 <code>/user [ID]</code> — زانیاری وردی بەکارهێنەر\n"
+        f"🔹 <code>/send [ID] [نامە]</code> — ناردنی نامەی تاکەکەسی\n"
         f"🔹 <code>/broadcast [نامە]</code> — ناردنی نامە بۆ هەمووان\n"
         f"🔹 <code>/addcredit [ID] [ژمارە]</code> — زیادکردنی کرێدیت\n"
         f"🔹 <code>/remcredit [ID] [ژمارە]</code> — کەمکردنەوەی کرێدیت\n"
+        f"🔹 <code>/setcredit [ID] [ژمارە]</code> — دیاریکردنی کرێدیت\n"
         f"🔹 <code>/ban [ID] [کات]</code> — بلۆککردن (m, h, d, w, mo, 0)\n"
         f"🔹 <code>/unban [ID]</code> — کردنەوەی بلۆک\n"
         f"🔹 <code>/on</code> — کاراکردنی بۆت\n"
         f"🔹 <code>/off</code> — ناچالاککردنی بۆت\n"
-        f"🔹 <code>/gen [ژمارە]</code> — دروستکردنی کۆدی خەڵات"
+        f"🔹 <code>/gen [ژمارە]</code> — دروستکردنی کۆدی خەڵات\n"
+        f"🔹 <code>/codes</code> — بینینی کۆدە چالاکەکان\n"
+        f"🔹 <code>/delcode [کۆد]</code> — سڕینەوەی کۆدێک\n"
+        f"🔹 <code>/clearcodes</code> — سڕینەوەی هەموو کۆدەکان\n"
+        f"🔹 <code>/backup</code> — داگرتنی فایلی داتابەیس"
     )
     bot.send_message(message.chat.id, text)
 
@@ -336,6 +387,22 @@ def cmd_user_info(message):
     )
     bot.reply_to(message, text)
 
+@bot.message_handler(commands=["send"])
+def cmd_send(message):
+    if message.from_user.id != ADMIN_ID: return
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 3 or not parts[1].isdigit():
+        bot.reply_to(message, "⚠️ شێواز هەڵەیە. بنووسە:\n<code>/send [ID] [نامە]</code>")
+        return
+    
+    target_id = int(parts[1])
+    msg_text = parts[2]
+    try:
+        bot.send_message(target_id, msg_text)
+        bot.reply_to(message, f"✅ نامە نێردرا بۆ <code>{target_id}</code>.")
+    except Exception as e:
+        bot.reply_to(message, f"❌ نەتوانرا نامە بنێردرێت. هۆکار: {e}")
+
 @bot.message_handler(commands=["broadcast"])
 def cmd_broadcast(message):
     if message.from_user.id != ADMIN_ID: return
@@ -376,6 +443,17 @@ def cmd_remove_credit(message):
     target_id, amount = int(parts[1]), int(parts[2])
     remove_credit(target_id, amount)
     bot.reply_to(message, f"✅ <b>{amount}</b> کرێدیت کەمکرایەوە لە <code>{target_id}</code>.")
+
+@bot.message_handler(commands=["setcredit"])
+def cmd_set_credit(message):
+    if message.from_user.id != ADMIN_ID: return
+    parts = message.text.split()
+    if len(parts) < 3 or not parts[1].isdigit() or not parts[2].isdigit():
+        bot.reply_to(message, "⚠️ شێواز هەڵەیە. بنووسە:\n<code>/setcredit [ID] [ژمارە]</code>")
+        return
+    target_id, amount = int(parts[1]), int(parts[2])
+    set_credit(target_id, amount)
+    bot.reply_to(message, f"✅ کرێدیتی <code>{target_id}</code> کرا بە <b>{amount}</b>.")
 
 @bot.message_handler(commands=["ban"])
 def cmd_ban(message):
@@ -436,6 +514,47 @@ def cmd_gen(message):
     code = create_gift(reward)
     bot.reply_to(message, f"✅ کۆدی نوێ دروستکرا:\n<code>{code}</code>\n🎁 Reward: {reward}")
 
+@bot.message_handler(commands=["codes"])
+def cmd_codes(message):
+    if message.from_user.id != ADMIN_ID: return
+    rows = db().execute("SELECT code, reward FROM gift_codes WHERE used_by IS NULL ORDER BY rowid DESC LIMIT 10").fetchall()
+    if not rows:
+        bot.reply_to(message, "هیچ کۆدێکی چالاک نییە.")
+        return
+    
+    text = "🎁 <b>دوایین 10 کۆدی چالاک:</b>\n\n"
+    for r in rows:
+        text += f"🔹 <code>{r[0]}</code> (پرسیار: {r[1]})\n"
+    bot.reply_to(message, text)
+
+@bot.message_handler(commands=["delcode"])
+def cmd_del_code(message):
+    if message.from_user.id != ADMIN_ID: return
+    parts = message.text.split()
+    if len(parts) < 2:
+        bot.reply_to(message, "⚠️ تکایە کۆدەکە بنووسە. نموونە:\n<code>/delcode BUGFIX-1234-X100</code>")
+        return
+    code = parts[1]
+    db().execute("DELETE FROM gift_codes WHERE code=?", (code,))
+    db().commit()
+    bot.reply_to(message, f"✅ کۆدی <code>{code}</code> سڕایەوە.")
+
+@bot.message_handler(commands=["clearcodes"])
+def cmd_clear_codes(message):
+    if message.from_user.id != ADMIN_ID: return
+    db().execute("DELETE FROM gift_codes WHERE used_by IS NULL")
+    db().commit()
+    bot.reply_to(message, "✅ هەموو کۆدە بەکارنەهاتووەکان سڕانەوە.")
+
+@bot.message_handler(commands=["backup"])
+def cmd_backup(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        with open(DB_PATH, 'rb') as f:
+            bot.send_document(message.chat.id, f, caption="📁 <b>Backup Database</b>")
+    except Exception as e:
+        bot.reply_to(message, f"❌ کێشە لە داگرتنی فایل: {e}")
+
 # ==========================================
 # 5. هەندلەرەکانی بەکارهێنەر
 # ==========================================
@@ -447,7 +566,7 @@ def cmd_start(message):
     if banned and message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, f"🚫 تۆ بلۆککراویت. کاتی کردنەوە: {until}")
         return
-    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v49.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
+    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v64.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە و ئێستا لە ئاستی پریمیۆمدایە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
@@ -552,10 +671,10 @@ def handle_text(message):
         bot.reply_to(message, "🔒 بۆ داواکاری توڵ/کۆد پێویستە کۆدی خەڵات بەکاربهێنە: <code>/gift [کۆد]</code>")
         return
 
-    msg = bot.reply_to(message, "🧠 <b>گەڕان...</b>")
-    snippets = _search_snippets(q)
-    prof_response = make_professional_response(q, snippets)
-    res = f"{prof_response}" + get_signature()
+    msg = bot.reply_to(message, "🧠 <b>سیستەمی زیرەک شیکاری دەکات...</b>")
+    
+    ai_response = get_prime_ai_response(q)
+    res = f"{ai_response}" + get_signature()
     
     try:
         bot.edit_message_text(res, chat_id=message.chat.id, message_id=msg.message_id, parse_mode="HTML")
@@ -564,5 +683,5 @@ def handle_text(message):
 
 if __name__ == "__main__":
     init_db()
-    logger.info("v49.0 is up and running. absolute olliE.")
+    logger.info("v64.0 Prime AI is up and running. absolute olliE.")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
