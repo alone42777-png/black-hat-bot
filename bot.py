@@ -1,6 +1,5 @@
 import os
 import sys
-import json
 import random
 import sqlite3
 import logging
@@ -57,10 +56,14 @@ def init_db():
 
 def log_user(message):
     uid = message.from_user.id
-    fn = message.from_user.first_name
+    fn = message.from_user.first_name or "بێ ناو"
     un = message.from_user.username or ""
     db().execute("INSERT OR IGNORE INTO users (user_id, first_name, username) VALUES (?, ?, ?)", (uid, fn, un))
     db().execute("UPDATE users SET first_name=?, username=? WHERE user_id=?", (fn, un, uid))
+    db().commit()
+
+def log_memory(user_id, msg):
+    db().execute("INSERT INTO user_memory(user_id, message) VALUES(?,?)", (user_id, msg[:4000]))
     db().commit()
 
 # ==========================================
@@ -88,10 +91,6 @@ def get_admin_state(aid):
 
 def clear_admin_state(aid):
     db().execute("DELETE FROM admin_states WHERE admin_id=?", (aid,))
-    db().commit()
-
-def log_memory(user_id, msg):
-    db().execute("INSERT INTO user_memory(user_id, message) VALUES(?,?)", (user_id, msg[:4000]))
     db().commit()
 
 def add_credit(user_id, n):
@@ -138,7 +137,6 @@ TOPICS = {"it", "cyber", "security", "hack", "هاک", "سایبەر", "network"
 def is_allowed(q):
     return any(k in q.lower() for k in TOPICS)
 
-WEB_LANGS = ["html", "css", "javascript", "js", "php", "python", "react"]
 LANG_MAP = {"html": "HTML", "css": "CSS", "js": "JS", "javascript": "JavaScript", "php": "PHP", "python": "Python", "react": "React"}
 
 def _web_template(lang):
@@ -146,21 +144,10 @@ def _web_template(lang):
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Design — {lang}</title>
-  <style>
-    *{{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Tahoma,sans-serif}}
-    body{{background:#0d1117;color:#c9d1d9;display:flex;justify-content:center;align-items:center;min-height:100vh}}
-    .box{{background:#161b22;width:min(450px,92vw);padding:40px;border-radius:12px;border:1px solid #30363d;box-shadow:0 8px 30px rgba(0,0,0,.8)}}
-    .btn{{background:#238636;color:#fff;border:0;padding:12px 24px;border-radius:6px;font-weight:700;cursor:pointer;width:100%}}
-    .btn:hover{{background:#2ea043}}
-  </style>
 </head>
 <body>
-  <div class="box">
-    <h2 style="margin-bottom:16px">Design — {lang}</h2>
-    <button class="btn">Choose file</button>
-  </div>
+  <h2>Design — {lang}</h2>
 </body>
 </html>"""
 
@@ -181,6 +168,7 @@ def _search_snippets(query, timeout=8):
 # ==========================================
 @bot.message_handler(commands=["panel", "stats", "cmd_gift"])
 def cmd_panel(message):
+    log_user(message)
     if message.from_user.id != ADMIN_ID: 
         bot.reply_to(message, "❌ تۆ ئەدمین نیت!")
         return
@@ -223,13 +211,11 @@ def handle_admin_callbacks(call):
         if not rows:
             bot.answer_callback_query(call.id, "هیچ ئەندامێک نییە.")
             return
-        
         text = "👥 <b>دوایین 50 ئەندام:</b>\n\n"
         for r in rows:
             uid, fn, un, jd = r
             un_str = f"@{un}" if un else "بێ یوزەرنەیم"
             text += f"• {fn} ({un_str}) - <code>{uid}</code>\n"
-        
         bot.answer_callback_query(call.id, "✅ لیست نێردرا")
         bot.send_message(call.message.chat.id, text)
 
@@ -283,7 +269,7 @@ def handle_admin_input(message):
 @bot.message_handler(commands=["start"])
 def cmd_start(message):
     log_user(message)
-    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v43.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
+    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v43.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە." + get_signature())
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
@@ -315,7 +301,7 @@ def handle_photo(message):
     set_state(message.from_user.id, "wait_lang")
     bot.reply_to(message, "📷 <b>وێنە وەرگیرا.</b>\nئێستا ناوی زمانەکە بنووسە: <code>HTML</code>, <code>CSS</code>, <code>JS</code>, <code>PHP</code>, <code>Python</code>.")
 
-@bot.message_handler(func=lambda m: m.from_user.id != ADMIN_ID or get_admin_state(ADMIN_ID)[0] is None, content_types=["text"])
+@bot.message_handler(func=lambda m: m.from_user.id != ADMIN_ID or not get_admin_state(ADMIN_ID)[0], content_types=["text"])
 def handle_text(message):
     log_user(message)
     uid = message.from_user.id
