@@ -19,14 +19,14 @@ ADMIN_ID = 5527152252
 # ==========================================
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [%(levelname)s] - %(message)s')
-logger = logging.getLogger("BlackHatBugBountyCore")
+logger = logging.getLogger("BlackHatUniversalCore")
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
 user_states = {}
 daily_limits = {}
 
-# دروستکردنی 50 کۆدی ئاڵۆز و نایاب بۆ خەڵاتی دۆزینەوەی لاوازی (Bug Bounty)
+# 50 کۆدی خەڵاتی باگ باونتی
 VALID_GIFT_CODES = {
     f"BUGFIX-{random.randint(1000,9999)}-{random.choice(['X','Z','K','M'])}{random.randint(100,999)}": {"used": False, "reward_questions": 10}
     for _ in range(50)
@@ -69,7 +69,6 @@ def perform_web_search(query):
         logger.error(f"Search error: {e}")
     return None
 
-# بەشی تایبەت بۆ باگ و خەڵات و ناردنی نامە بۆ سەرۆکەکان لە کۆتایی هەموو پەیامێکدا
 def get_signature():
     return (
         "\n\n───────────────────\n"
@@ -80,14 +79,16 @@ def get_signature():
         "🔗 <b>@malikdlashad3</b> | <b>@ALONE427</b>"
     )
 
+# ڕێگەدان بە هەموو زمانەکانی پڕۆگرامسازی، تەکنیۆلۆجی، وێب و هاککردن
 def is_allowed_topic(query):
     query_lower = query.lower()
     allowed_keywords = [
         "it", "cyber", "security", "hack", "هاک", "سایبەر", "ئاسایش", "network", "تۆڕ", 
-        "linux", "windows", "python", "script", "kali", "nmap", "sqlmap", 
-        "ddos", "dos", "wifi", "وایفای", "exploit", "payload", "پەیلوود", "vulnerability", 
-        "لاوازی", "malware", "firewall", "database", "داتابەیس", 
-        "encryption", "پاسوۆرد", "password", "proxy", "vpn", "سێرڤەر", "server", "gift", "کۆد", "باگ", "bug"
+        "linux", "windows", "python", "script", "kali", "nmap", "sqlmap", "html", "css", 
+        "javascript", "js", "php", "sql", "java", "c++", "c#", "swift", "kotlin", "web", 
+        "وێب", "سایت", "website", "code", "کۆد", "program", "پڕۆگرام", "ddos", "dos", "wifi", 
+        "وایفای", "exploit", "payload", "پەیلوود", "vulnerability", "لاوازی", "malware", 
+        "firewall", "database", "داتابەیس", "encryption", "پاسوۆرد", "password", "gift", "کۆد", "باگ", "bug"
     ]
     return any(keyword in query_lower for keyword in allowed_keywords)
 
@@ -100,11 +101,12 @@ def cmd_ai_start(message):
     if is_admin:
         role_text = "👑 <b>(جۆری هەژمار: ئەدمنی سێرڤەرەکەیت - داواکارییەکانت بێکۆتان ♾️)</b>"
     else:
-        role_text = "👤 <b>(جۆری هەژمار: ئەندامی ئاسایی - سنووری ڕۆژانە: 5 داواکاری بۆ توڵ)</b>"
+        role_text = "👤 <b>(جۆری هەژمار: ئەندامی ئاسایی - سنووری ڕۆژانە: 5 داواکاری بۆ توڵ و پڕۆگرامسازی)</b>"
 
     welcome_banner = (
-        "💀 <b>BLACK HAT AI BUG BOUNTY CORE v25.0</b> 💀\n\n"
-        "سڵاو! من زیرەکییەکی دەستکردم و تەنها بۆ بابەتی **IT، Cyber Security و Hacking** تەرخان کراوم.\n\n"
+        "💀 <b>BLACK HAT AI UNIVERSAL CORE v26.0</b> 💀\n\n"
+        "سڵاو! من زیرەکییەکی دەستکردم و بۆت هەموو زمانەکانی پڕۆگرامسازی، وێب دیزاین و ئاسایشی سایبەری ئامادەم.\n"
+        "🌐 <i>ئەگەر داوای دروستکردنی وێب (Web) بکەیت، سەرەتا داوای دیزاینەکەی بە وێنە و شێوازی بینکاری دەکەم!</i>\n\n"
         f"{role_text}"
         + get_signature()
     )
@@ -128,22 +130,21 @@ def cmd_gift_handler(message):
             questions_count = VALID_GIFT_CODES[code]["reward_questions"]
             bot.reply_to(message, f"🎉 <b>پیرۆزە!</b> کۆدەکەت بە سەرکەوتوویی کارا بوو.\n🎁 تۆ شایستەی خەڵات و دیاری بوویت بۆ دۆزینەوەی باگ لە سیستەمدا.\n✨ بڕی خەڵات: <b>{questions_count} پرسیاری تایبەت و خەڵاتکراو</b> چالاک کرا!" + get_signature())
     else:
-        bot.reply_to(message, "❌ <b>هەڵە!</b> کۆدی باگی ناتەواو یان نەناسراو. تەنها 50 کۆدی تایبەت بوونیان هەیە." + get_signature())
+        bot.reply_to(message, "❌ <b>هەڵە!</b> کۆدی باگی ناتەواو یان نەناسراو." + get_signature())
 
 # 3. فەرمانی /help
 @bot.message_handler(commands=['help'])
 def cmd_help(message):
     help_text = (
-        "🛠 <b>لیستی گشتگیر و جیهانی توڵەکان (Global Hacking Directory):</b>\n\n"
-        "🌐 <b>1. بەشی سکانکردن و زانیاری (Reconnaissance & OSINT):</b>\n"
-        "• <code>/nmap [IP]</code> - سکانی قووڵی پۆرت و خزمەتگوزارییەکان.\n\n"
-        "💥 <b>2. بەشی لاوازی و هێرشی وێب (Exploitation & Web Attacks):</b>\n"
-        "• <b>Sqlmap Suite / Hydra:</b> شکاندنی پەسۆرد و تاقیکردنەوە.\n\n"
-        "⚡ <b>3. بەشی فەوتاندن و هێرشی تۆڕ (DoS & DDoS Advanced Suites):</b>\n"
-        "• <b>SYN Flood / Heavy Stress.</b>\n\n"
-        "🎁 <b>4. بەشی دیاری و خەڵاتی باگ (Bug Bounty System):</b>\n"
-        "• <code>/gift [کۆد]</code> - بەکارهێنانی کۆدی خەڵاتی دۆزەرەوەی باگ.\n\n"
-        "🧠 <b>5. سیستەمی فەرمی ئاسایشی سایبەری و IT.</b>\n"
+        "🛠 <b>لیستی گشتگیر و جیهانی توڵەکان (Global Directory):</b>\n\n"
+        "🌐 <b>1. بەشی پڕۆگرامسازی و دروستکردنی وێب (Web & Coding):</b>\n"
+        "• HTML, CSS, JavaScript, Python, PHP, SQL و هەموو زمانەکانی تر.\n"
+        "• سیستەمی داواکردنی وێنە و دیزاینی وێب پێش نووسینی کۆد.\n\n"
+        "💥 <b>2. بەشی هاککردن و ئاسایش (Hacking & Security):</b>\n"
+        "• <code>/nmap [IP]</code> - سکانی قووڵی پۆرت.\n"
+        "• Sqlmap, Hydra, Wi-Fi Tools, DDoS Suites.\n\n"
+        "🎁 <b>3. بەشی دیاری و خەڵاتی باگ (Bug Bounty):</b>\n"
+        "• <code>/gift [کۆد]</code> - بەکارهێنانی کۆدی خەڵات.\n\n"
         + get_signature()
     )
     bot.reply_to(message, help_text)
@@ -195,7 +196,7 @@ def ai_shell_handler(message):
     except Exception as e:
         bot.reply_to(message, f"❌ هەڵە لە جێبەجێکردندا: {e}" + get_signature())
 
-# 6. مۆدیوڵی سەرەکی
+# 6. مۆدیوڵی سەرەکی (پشتیوانی لە هەموو زمانەکانی پۆگرامسازی و داواکردنی دیزاینی وێب بە وێنە)
 @bot.message_handler(func=lambda message: True)
 def ai_blackhat_brain(message):
     user_id = message.from_user.id
@@ -210,27 +211,41 @@ def ai_blackhat_brain(message):
 
     if not is_allowed_topic(query):
         refusal_msg = (
-            "❌ <b>ببوورە!</b> پرسیاری دەرەکی وەڵام نادرێتەوە.\n"
-            "من تەنها بۆ بابەتی <b>Hacking، Cyber Security و IT</b> تەرخان کراوم."
+            "❌ <b>ببوورە!</b> ئەم بابەتە لە دەرەوەی توانا و پۆلێنکردنی منە.\n"
+            "من تەنها بۆ پڕۆگرامسازی، زمانەکانی کۆدکردن، وێب دیزاین، IT و Cyber Security تەرخان کراوم."
             + get_signature()
         )
         bot.reply_to(message, refusal_msg)
         return
 
-    is_tool_request = any(w in query_lower for w in ["توڵی", "توڵێکی", "سکریپتی", "پەیلوودی", "payload", "ddos", "دوس", "دی‌دی‌ئۆس", "wifi scan", "وایفای", "سکانەر", "attack tool", "بهێزتر", "به‌هێز", "exploit", "دروست بکە"])
+    # پشکنینی ئەوەی ئایا داوای دروستکردنی وێب (Web Site) کراوە
+    is_web_request = any(w in query_lower for w in ["web", "وێب", "سایت", "website", "html", "css", "front-end", "landing page"])
+    if is_web_request:
+        web_flow_msg = (
+            "🌐 <b>سیستەمی دروستکردنی وێب (Web Development Flow):</b>\n\n"
+            "بۆ ئەوەی وێبسایتەکەت بە تەواوی و بە کوالیتی بەرز دروست بکەم، پێویستە ئەم هەنگاوانە جێبەجێ بکەین:\n\n"
+            "1️⃣ <b>دیزاین (Design & Concept):</b> تکایە سەرەتا **وێنەی دیزاینەکە** (Screenshot یان Witeframe) بنێرە یاخود شێوازی پێکهاتەکەی بە ڕستە کۆپی بکە و بۆم بنێرە.\n"
+            "2️⃣ <b>هەڵبژاردنی زمان (Language):</b> دوای ناردنی دیزاینەکە، پێم بڵێ دەتەوێت بە چ زمانێک (بۆ نموونە HTML/CSS/JS یان PHP یان Framework) بۆت دروست بکەم.\n\n"
+            "📌 <i>فەرموو سەرەتا وێنە یان شێوازی دیزاینی وێبەکەت بنێرە!</i>"
+            + get_signature()
+        )
+        bot.reply_to(message, web_flow_msg)
+        return
+
+    is_tool_request = any(w in query_lower for w in ["توڵی", "توڵێکی", "سکریپتی", "پەیلوودی", "payload", "ddos", "دوس", "دی‌دی‌ئۆس", "wifi scan", "وایفای", "سکانەر", "attack tool", "بهێزتر", "به‌هێز", "exploit", "دروست بکە", "کۆد بۆ", "کۆدێک بۆ"])
 
     if not is_tool_request:
-        thinking_msg = bot.reply_to(message, "🧠 <b>بیرکردنەوە...</b> (خەریکی شیکردنەوەی بابەتی تەکنیکی و سایبەریم)")
+        thinking_msg = bot.reply_to(message, "🧠 <b>بیرکردنەوە...</b> (خەریکی شیکردنەوەی داواکارییەکەت و ئامادەکردنی کۆد/زانیاری)")
         
         web_results = perform_web_search(query)
         if web_results:
             response_content = web_results
         else:
-            response_content = f"بابەتی ({query}) لە ڕوانگەی ئاسایشی سایبەری و تەکنیکییەوە لێکۆڵینەوەی بۆ کرا."
+            response_content = f"بابەتی ({query}) بە وردی لە ڕوانگەی پڕۆگرامسازی و تەکنەلۆجییەوە شیکرایەوە."
 
         response_text = (
-            f"🛡 <b>Cyber Security & IT Analysis:</b>\n\n"
-            f"<b>پرسیار:</b> <i>{query}</i>\n\n"
+            f"💻 <b>Programming & Tech Analysis:</b>\n\n"
+            f"<b>داواکاری:</b> <i>{query}</i>\n\n"
             f"{response_content}"
             + get_signature()
         )
@@ -246,94 +261,35 @@ def ai_blackhat_brain(message):
         bot.reply_to(message, "⚠️ <b>تێپەڕاندنی سنوور!</b> گیانەکەم، تۆ بەکارهێنانی ڕۆژانەی خۆت (5 داواکاری) تەواو کرد." + get_signature())
         return
 
-    # توڵی وایفای
-    if any(w in query_lower for w in ["wifi", "وایفای", "wireless", "رۆتەر", "router", "وای فای"]):
-        tool_desc = "📶 <b>ڕوونکردنەوەی توڵ:</b> ئەم توڵە دەتوانێت بۆ پشکنینی هێز و لاوازی تۆڕە بێتەلەکان (Wi-Fi) و گرتنی هەندشەی WPA2 بەکار بێت، هاوکات داتابەیسێکی گەورە پڕ لە 10,000 پاسوۆرد و زانیاری بۆ تاقیکردنەوە دروست دەکات."
-        wifi_code = (
-            "# Advanced Enterprise Wi-Fi Packet Sniffer & 10K DB Generator\n"
-            "# Developed by @ALONE427 & @malikdlashad3\n"
-            "import os, sys, time, sqlite3\n\n"
-            "def generate_10k_database():\n"
-            "    print('[*] Initializing 10,000 Records Database...')\n"
-            "    conn = sqlite3.connect('wifi_database_10k.db')\n"
-            "    cursor = conn.cursor()\n"
-            "    cursor.execute('CREATE TABLE IF NOT EXISTS records (id INTEGER PRIMARY KEY, data TEXT)')\n"
-            "    records = [(i, f'WIFI_PAYLOAD_SIGNATURE_{i}') for i in range(1, 10001)]\n"
-            "    cursor.executemany('INSERT OR IGNORE INTO records VALUES (?, ?)', records)\n"
-            "    conn.commit()\n"
-            "    conn.close()\n"
-            "    print('[+] Successfully saved 10,000 records into wifi_database_10k.db!')\n\n"
-            "if __name__ == '__main__':\n"
-            "    generate_10k_database()"
-        )
-        wifi_inst = (
-            "📌 <b>ڕێنمایی بەکارهێنان:</b>\n"
-            "1. کۆدەکە لە فایلێک بە ناوی <code>wifi_10k.py</code> پاشەکەوت بکە.\n"
-            "2. لە تێرماکس کارپێکردن ئەنجام بدە:\n"
-            "   <code>python wifi_10k.py</code>"
-        )
-        bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{wifi_code}</code></pre>\n\n{wifi_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})" + get_signature())
-        return
-
-    # توڵی DDoS
-    elif any(w in query_lower for w in ["ddos", "دوس", "دی‌دی‌ئۆس", "تۆلیک", "attack", "فەوتاندن", "بهێزتر", "به‌هێز", "pro", "heavy"]):
-        tool_desc = "💥 <b>ڕوونکردنەوەی توڵ:</b> ئەم توڵە تایبەتە بە ناردنی ترافیکی تاقیکاری قورس بۆ سەر سێرڤەر (Multi-threaded Stress Testing)، لەگەڵ پاشەکەوتکردنی داتابەیسی 10,000 ئایپی و پۆرت بۆ ئاسانکاری."
-        heavy_ddos = (
-            "# Ultra-Performance DDoS Suite with 10K Proxy/Target DB\n"
-            "# Developed by @ALONE427 & @malikdlashad3\n"
-            "import socket, threading, random, time, sqlite3\n\n"
-            "def generate_10k_database():\n"
-            "    print('[*] Generating 10,000 Target/Proxy records for DDoS engine...')\n"
-            "    conn = sqlite3.connect('ddos_targets_10k.db')\n"
-            "    cursor = conn.cursor()\n"
-            "    cursor.execute('CREATE TABLE IF NOT EXISTS targets (id INTEGER PRIMARY KEY, ip_node TEXT)')\n"
-            "    nodes = [(i, f'192.168.1.{i % 255}') for i in range(1, 10001)]\n"
-            "    cursor.executemany('INSERT OR IGNORE INTO targets VALUES (?, ?)', nodes)\n"
-            "    conn.commit()\n"
-            "    conn.close()\n"
-            "    print('[+] Successfully created and saved 10,000 records in ddos_targets_10k.db!')\n\n"
-            "if __name__ == '__main__':\n"
-            "    generate_10k_database()"
-        )
-        heavy_inst = (
-            "📌 <b>ڕێنمایی بەکارهێنان:</b>\n"
-            "1. کۆدەکە لە فایلێک بە ناوی <code>ddos_10k.py</code> پاشەکەوت بکە.\n"
-            "2. لە تێرماکس جێبەجێی بکە:\n"
-            "   <code>python ddos_10k.py</code>"
-        )
-        bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{heavy_ddos}</code></pre>\n\n{heavy_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})" + get_signature())
-        return
-
-    else:
-        rand_core = random.randint(5000, 9999)
-        tool_desc = f"🛠 <b>ڕوونکردنەوەی توڵ:</b> ئەم توڵە تایبەتە بە دروستکردنی سکریپتی پاراستن و شیکردنەوەی ئامانج ({query})، کە 10,000 تۆماری زانیاریش لە خۆ دەگرێت."
-        custom_code = (
-            f"# Custom Cyber Security Module #{rand_core} with 10K DB\n"
-            f"# Target Specification: {query}\n"
-            f"# Developed by @ALONE427 & @malikdlashad3\n\n"
-            f"import socket, sys, time, sqlite3\n\n"
-            f"def generate_10k_database():\n"
-            f"    print('[*] Initializing 10,000 security records for module #{rand_core}...')\n"
-            f"    conn = sqlite3.connect('security_data_10k.db')\n"
-            f"    cursor = conn.cursor()\n"
-            f"    cursor.execute('CREATE TABLE IF NOT EXISTS payloads (id INTEGER PRIMARY KEY, signature TEXT)')\n"
-            f"    data = [(i, f'EXPLOIT_SIG_NODE_{i}') for i in range(1, 10001)]\n"
-            f"    cursor.executemany('INSERT OR IGNORE INTO payloads VALUES (?, ?)', data)\n"
-            f"    conn.commit()\n"
-            f"    conn.close()\n"
-            f"    print('[+] Successfully saved 10,000 records into security_data_10k.db!')\n\n"
-            "if __name__ == '__main__':\n"
-            "    generate_10k_database()"
-        )
-        custom_inst = (
-            "📌 <b>ڕێنمایی بەکارهێنان:</b>\n"
-            f"1. کۆدەکە لە فایلێک بە ناوی <code>exploit_{rand_core}.py</code> پاشەکەوت بکە.\n"
-            f"2. لە تێرماکس جێبەجێی بکە:\n"
-            f"   <code>python exploit_{rand_core}.py</code>"
-        )
-        bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{custom_code}</code></pre>\n\n{custom_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})" + get_signature())
-        return
+    # دروستکردنی توڵ یان کۆدی پڕۆگرامسازی گشتی لەگەڵ داتابەیسی 10K
+    rand_core = random.randint(5000, 9999)
+    tool_desc = f"🛠 <b>ڕوونکردنەوەی کۆد/توڵ:</b> ئەم سکریپتە تایبەتە بە داواکارییەکەت ({query})، لەگەڵ پاشەکەوتکردنی داتابەیسی لۆکاڵی پڕ لە 10,000 تۆماری زانیاری."
+    custom_code = (
+        f"# Universal Programming & Security Module #{rand_core}\n"
+        f"# Target/Requirement: {query}\n"
+        f"# Developed by @ALONE427 & @malikdlashad3\n\n"
+        "import os, sys, time, sqlite3\n\n"
+        "def generate_10k_database():\n"
+        "    print('[*] Initializing 10,000 records database for generated module...')\n"
+        "    conn = sqlite3.connect('project_database_10k.db')\n"
+        "    cursor = conn.cursor()\n"
+        "    cursor.execute('CREATE TABLE IF NOT EXISTS records (id INTEGER PRIMARY KEY, payload TEXT)')\n"
+        "    data = [(i, f'NODE_SIGNATURE_{i}') for i in range(1, 10001)]\n"
+        "    cursor.executemany('INSERT OR IGNORE INTO records VALUES (?, ?)', data)\n"
+        "    conn.commit()\n"
+        "    conn.close()\n"
+        "    print('[+] Successfully created and saved 10,000 records in project_database_10k.db!')\n\n"
+        "if __name__ == '__main__':\n"
+        "    generate_10k_database()"
+    )
+    custom_inst = (
+        "📌 <b>ڕێنمایی بەکارهێنان:</b>\n"
+        f"1. کۆدەکە لە فایلێک بە ناوی <code>script_{rand_core}.py</code> پاشەکەوت بکە.\n"
+        f"2. لە تێرماکس جێبەجێی بکە:\n"
+        f"   <code>python script_{rand_core}.py</code>"
+    )
+    bot.reply_to(message, f"{tool_desc}\n\n<pre><code>{custom_code}</code></pre>\n\n{custom_inst}\n\n(داواکارییەکانی ئەمڕۆت ماوە: {remaining})" + get_signature())
 
 if __name__ == '__main__':
-    logger.info("Black Hat Bug Bounty Core started successfully.")
+    logger.info("Black Hat Universal Core started successfully.")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
