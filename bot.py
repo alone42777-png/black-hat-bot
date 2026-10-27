@@ -544,4 +544,4 @@ def handle_text(message):
         return
 
     if not is_allowed(q):
-        bot.reply_to(message, "
+        bot.reply_to(message, "❌ تەنها بابەتی <b>Hacking، Cyber Security، IT، پڕۆ
