@@ -547,4 +547,4 @@ def handle_text(message):
         bot.reply_to(message, "❌ تەنها بابەتی <b>Hacking، Cyber Security، IT، پڕۆگرامسازی</b> وەڵام دەدرێتەوە.")
         return
 
-    if any(w in ql for w in ("web", "وێب
+    is_tool = any(w in ql for w in ("توڵ", "س
