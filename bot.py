@@ -107,7 +107,6 @@ def check_ban(uid):
             return False, None
         return True, ban_until
     except ValueError:
-        # ئەگەر کاتەکە هەڵە بوو، بلۆکەکە لادەبەرە
         db().execute("UPDATE users SET is_banned=0, ban_until=NULL WHERE user_id=?", (uid,))
         db().commit()
         return False, None
@@ -260,7 +259,7 @@ def cmd_panel(message):
     bot_status = get_bot_status()
     
     text = (
-        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v49.0</b> 👑\n\n"
+        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v51.0</b> 👑\n\n"
         f"👤 کۆی بەکارهێنەران: <b>{total_users}</b>\n"
         f"🎁 کۆدی خەڵات: <b>{total_codes}</b> (بەکارهاتوو: {used_codes})\n"
         f"⚙️ دۆخی بۆت: <b>{'✅ کارا' if bot_status == 'on' else '❌ ناچالاک'}</b>\n\n"
@@ -356,25 +355,40 @@ def cmd_broadcast(message):
             failed += 1
     bot.reply_to(message, f"✅ نێردرا بۆ: {sent}\n❌ شکست: {failed}")
 
-@bot.message_handler(commands=["addcredit"])
+# فەرمانە کوردییەکان بە شێوازی جێگرەوە
+@bot.message_handler(func=lambda m: m.text.startswith("/زیادکردنی") or m.text.startswith("/addcredit"))
 def cmd_add_credit(message):
     if message.from_user.id != ADMIN_ID: return
-    parts = message.text.split()
-    if len(parts) < 3 or not parts[1].isdigit() or not parts[2].isdigit():
-        bot.reply_to(message, "⚠️ شێواز هەڵەیە. بنووسە:\n<code>/addcredit [ID] [ژمارە]</code>")
-        return
-    target_id, amount = int(parts[1]), int(parts[2])
+    text = message.text.replace("/زیادکردنی", "").replace("/addcredit", "").strip()
+    parts = text.split()
+    
+    if len(parts) < 3 or parts[0] != "کریدت" or not parts[1].isdigit() or not parts[2].isdigit():
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            target_id, amount = int(parts[0]), int(parts[1])
+        else:
+            bot.reply_to(message, "⚠️ شێواز هەڵەیە. بنووسە:\n<code>/زیادکردنی کریدت [ID] [ژمارە]</code>")
+            return
+    else:
+        target_id, amount = int(parts[1]), int(parts[2])
+        
     add_credit(target_id, amount)
     bot.reply_to(message, f"✅ <b>{amount}</b> کرێدیت زیادکرا بۆ <code>{target_id}</code>.")
 
-@bot.message_handler(commands=["remcredit"])
+@bot.message_handler(func=lambda m: m.text.startswith("/کەمکردنی") or m.text.startswith("/remcredit"))
 def cmd_remove_credit(message):
     if message.from_user.id != ADMIN_ID: return
-    parts = message.text.split()
-    if len(parts) < 3 or not parts[1].isdigit() or not parts[2].isdigit():
-        bot.reply_to(message, "⚠️ شێواز هەڵەیە. بنووسە:\n<code>/remcredit [ID] [ژمارە]</code>")
-        return
-    target_id, amount = int(parts[1]), int(parts[2])
+    text = message.text.replace("/کەمکردنی", "").replace("/remcredit", "").strip()
+    parts = text.split()
+    
+    if len(parts) < 3 or parts[0] != "کریدت" or not parts[1].isdigit() or not parts[2].isdigit():
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            target_id, amount = int(parts[0]), int(parts[1])
+        else:
+            bot.reply_to(message, "⚠️ شێواز هەڵەیە. بنووسە:\n<code>/کەمکردنی کریدت [ID] [ژمارە]</code>")
+            return
+    else:
+        target_id, amount = int(parts[1]), int(parts[2])
+        
     remove_credit(target_id, amount)
     bot.reply_to(message, f"✅ <b>{amount}</b> کرێدیت کەمکرایەوە لە <code>{target_id}</code>.")
 
@@ -448,7 +462,7 @@ def cmd_start(message):
     if banned and message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, f"🚫 تۆ بلۆککراویت. کاتی کردنەوە: {until}")
         return
-    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v49.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
+    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v51.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
@@ -524,4 +538,19 @@ def handle_text(message):
     if state == "wait_lang":
         found_lang = None
         for k, v in LANG_MAP.items():
-            if
+            if re.search(rf'\b{k}\b', ql):
+                found_lang = v
+                break
+        if not found_lang:
+            bot.reply_to(message, "❓ زمان نەناسرا. تکایە بنووسە: HTML، CSS، JS، PHP، Python یان React.")
+            return
+        clear_state(uid)
+        code = _web_template(found_lang)
+        safe_code = html.escape(code)
+        bot.reply_to(message, f"✨ <b>کۆد بۆ {found_lang} ئامادەیە:</b>\n<pre><code>{safe_code}</code></pre>")
+        return
+
+    if any(k in ql for k in ("کێ دروست", "who made you", "خاوەنی تۆ")):
+        bot.reply_to(message, "من لەلایەن @ALONE427 و @malikdlashad3 ـەوە دروستکراوم. 👑")
+        return
+        
