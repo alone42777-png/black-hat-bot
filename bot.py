@@ -145,9 +145,19 @@ def _web_template(lang):
 <head>
   <meta charset="UTF-8">
   <title>Design — {lang}</title>
+  <style>
+    *{{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Tahoma,sans-serif}}
+    body{{background:#0d1117;color:#c9d1d9;display:flex;justify-content:center;align-items:center;min-height:100vh}}
+    .box{{background:#161b22;width:min(450px,92vw);padding:40px;border-radius:12px;border:1px solid #30363d;box-shadow:0 8px 30px rgba(0,0,0,.8)}}
+    .btn{{background:#238636;color:#fff;border:0;padding:12px 24px;border-radius:6px;font-weight:700;cursor:pointer;width:100%}}
+    .btn:hover{{background:#2ea043}}
+  </style>
 </head>
 <body>
-  <h2>Design — {lang}</h2>
+  <div class="box">
+    <h2 style="margin-bottom:16px">Design — {lang}</h2>
+    <button class="btn">Choose file</button>
+  </div>
 </body>
 </html>"""
 
@@ -301,17 +311,14 @@ def handle_photo(message):
     set_state(message.from_user.id, "wait_lang")
     bot.reply_to(message, "📷 <b>وێنە وەرگیرا.</b>\nئێستا ناوی زمانەکە بنووسە: <code>HTML</code>, <code>CSS</code>, <code>JS</code>, <code>PHP</code>, <code>Python</code>.")
 
-@bot.message_handler(func=lambda m: m.from_user.id != ADMIN_ID or not get_admin_state(ADMIN_ID)[0], content_types=["text"])
+# فلتەرێکی تەواو بۆ نامە دەقییەکان کە ڕێگە بە دوگمەکان نادات تێکبچێن
+@bot.message_handler(func=lambda m: not (m.from_user.id == ADMIN_ID and get_admin_state(ADMIN_ID)[0] in ("wait_broadcast", "wait_gen_reward")) and not m.text.startswith("/"), content_types=["text"])
 def handle_text(message):
     log_user(message)
     uid = message.from_user.id
     q = message.text.strip()
     ql = q.lower()
     state, _ = get_state(uid)
-    
-    if q.startswith("/"):
-        bot.reply_to(message, "❌ فەرمانێکی نەناسراو.")
-        return
 
     if state == "wait_lang":
         found_lang = None
