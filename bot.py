@@ -8,6 +8,7 @@ import threading
 import urllib.parse
 import urllib.request
 import re
+import time
 from datetime import datetime, timedelta
 
 import telebot
@@ -246,7 +247,7 @@ def make_professional_response(query, snippets):
     return f"🛡 <b>شیکاری ئاسایش و پڕۆگرامسازی:</b>\n\n<i>{intro}</i>\n\n{body}"
 
 # ==========================================
-# 4. پەنێلی ئەدمین (بە دەق)
+# 4. پەنێلی ئەدمین
 # ==========================================
 @bot.message_handler(commands=["panel"])
 def cmd_panel(message):
@@ -259,14 +260,14 @@ def cmd_panel(message):
     bot_status = get_bot_status()
     
     text = (
-        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v51.0</b> 👑\n\n"
+        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v52.0</b> 👑\n\n"
         f"👤 کۆی بەکارهێنەران: <b>{total_users}</b>\n"
         f"🎁 کۆدی خەڵات: <b>{total_codes}</b> (بەکارهاتوو: {used_codes})\n"
         f"⚙️ دۆخی بۆت: <b>{'✅ کارا' if bot_status == 'on' else '❌ ناچالاک'}</b>\n\n"
         f"📌 <b>فەرمانەکان:</b>\n\n"
         f"🔹 <code>/stats</code> — ئاماری سیستەم\n"
         f"🔹 <code>/members</code> — لیستی دوایین 50 ئەندام\n"
-        f"🔹 <code>/user [ID]</code> — بینینی زانیاری وردی بەکارهێنەر\n"
+        f"🔹 <code>/user [ID]</code> — زانیاری وردی بەکارهێنەر\n"
         f"🔹 <code>/broadcast [نامە]</code> — ناردنی نامە بۆ هەمووان\n"
         f"🔹 <code>/addcredit [ID] [ژمارە]</code> — زیادکردنی کرێدیت\n"
         f"🔹 <code>/remcredit [ID] [ژمارە]</code> — کەمکردنەوەی کرێدیت\n"
@@ -355,7 +356,6 @@ def cmd_broadcast(message):
             failed += 1
     bot.reply_to(message, f"✅ نێردرا بۆ: {sent}\n❌ شکست: {failed}")
 
-# فەرمانە کوردییەکان بە شێوازی جێگرەوە
 @bot.message_handler(func=lambda m: m.text.startswith("/زیادکردنی") or m.text.startswith("/addcredit"))
 def cmd_add_credit(message):
     if message.from_user.id != ADMIN_ID: return
@@ -462,7 +462,7 @@ def cmd_start(message):
     if banned and message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, f"🚫 تۆ بلۆککراویت. کاتی کردنەوە: {until}")
         return
-    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v51.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
+    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI GOD-TIER CORE v52.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
@@ -547,10 +547,4 @@ def handle_text(message):
         clear_state(uid)
         code = _web_template(found_lang)
         safe_code = html.escape(code)
-        bot.reply_to(message, f"✨ <b>کۆد بۆ {found_lang} ئامادەیە:</b>\n<pre><code>{safe_code}</code></pre>")
-        return
-
-    if any(k in ql for k in ("کێ دروست", "who made you", "خاوەنی تۆ")):
-        bot.reply_to(message, "من لەلایەن @ALONE427 و @malikdlashad3 ـەوە دروستکراوم. 👑")
-        return
-        
+        bot.reply_to(message, f"✨ <b>کۆد بۆ {found_lang} ئام
