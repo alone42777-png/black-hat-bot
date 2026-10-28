@@ -19,8 +19,8 @@ TOKEN = "8613090176:AAFK1kyiIBhGp7CP5PE_4xahT-gW1gTsx5M"
 ADMIN_ID = 5527152252
 DB_PATH = "bot_database.db"
 
-# کلیلەکە لێرە داینرا
-AI_API_KEY = "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"
+# کلیلە نوێیەکە لێرە داینرا (Google Gemini)
+AI_API_KEY = "AQ.Ab8RN6JwiCH_nK4jO18J2hjW267xM0uMs0TPRWnuZ1z0vmKV4A"
 # ==========================================
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
@@ -188,7 +188,7 @@ def redeem_gift(user_id, code):
     return True, "ok", row[1]
 
 # ==========================================
-# 3. مێشکی زیرەک (AI Core)
+# 3. مێشکی زیرەک (AI Core - Gemini)
 # ==========================================
 def get_signature():
     return (
@@ -259,25 +259,23 @@ def get_prime_ai_response(query):
         return make_professional_response(query, snippets)
 
     try:
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {AI_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        # بەکارهێنانی API ی Gemini
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={AI_API_KEY}"
+        headers = {"Content-Type": "application/json"}
+        
+        prompt = f"You are BLACK HAT AI PRIME, an expert in cybersecurity, hacking, and programming. Answer professionally in Kurdish Sorani. Be direct, technical, and helpful. Do not use markdown code blocks unless necessary. User asks: {query}"
+        
         payload = {
-            "model": "llama3-70b-8192",
-            "messages": [
-                {"role": "system", "content": "You are BLACK HAT AI PRIME, an expert in cybersecurity, hacking, and programming. Answer professionally in Kurdish Sorani. Be direct, technical, and helpful. Do not use markdown code blocks unless necessary."},
-                {"role": "user", "content": query}
-            ],
-            "temperature": 0.7,
-            "max_tokens": 1024
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }]
         }
+        
         response = requests.post(url, headers=headers, json=payload, timeout=20)
         data = response.json()
         
-        if 'choices' in data and len(data['choices']) > 0:
-            return data['choices'][0]['message']['content']
+        if 'candidates' in data and len(data['candidates']) > 0:
+            return data['candidates'][0]['content']['parts'][0]['text']
         else:
             logger.error(f"AI API Error: {data}")
             snippets = _search_snippets(query)
@@ -300,10 +298,10 @@ def cmd_panel(message):
     total_codes = db().execute("SELECT COUNT(*) FROM gift_codes").fetchone()[0]
     used_codes = db().execute("SELECT COUNT(*) FROM gift_codes WHERE used_by IS NOT NULL").fetchone()[0]
     bot_status = get_bot_status()
-    ai_status = "✅ چالاک" if AI_API_KEY else "❌ ناچالاک"
+    ai_status = "✅ چالاک (Gemini)" if AI_API_KEY else "❌ ناچالاک"
     
     text = (
-        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v64.0</b> 👑\n\n"
+        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v65.0</b> 👑\n\n"
         f"👤 کۆی بەکارهێنەران: <b>{total_users}</b>\n"
         f"🎁 کۆدی خەڵات: <b>{total_codes}</b> (بەکارهاتوو: {used_codes})\n"
         f"⚙️ دۆخی بۆت: <b>{'✅ کارا' if bot_status == 'on' else '❌ ناچالاک'}</b>\n"
@@ -566,7 +564,7 @@ def cmd_start(message):
     if banned and message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, f"🚫 تۆ بلۆککراویت. کاتی کردنەوە: {until}")
         return
-    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v64.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە و ئێستا لە ئاستی پریمیۆمدایە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
+    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v65.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە و ئێستا لە ئاستی پریمیۆمدایە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
@@ -683,5 +681,5 @@ def handle_text(message):
 
 if __name__ == "__main__":
     init_db()
-    logger.info("v64.0 Prime AI is up and running. absolute olliE.")
+    logger.info("v65.0 Prime AI (Gemini) is up and running. absolute olliE.")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
