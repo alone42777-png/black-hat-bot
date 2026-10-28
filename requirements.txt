@@ -1,6 +1,6 @@
-pyTelegramBotAPI
+pyTelegramBotAPI>=4.26.0,<5.0
+openai>=1.68.0,<3.0
 requests
 qrcode
 pillow
-aiohttp
 psutil
