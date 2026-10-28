@@ -11,11 +11,15 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 355
+    timeout-minutes: 355 
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install pyTelegramBotAPI requests qrcode pillow
-      - run: python main.py  # <--- ئەمە گۆڕدرا بۆ main.py
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run Bot
+        run: python main.py
