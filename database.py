@@ -35,6 +35,17 @@ def init_db():
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
         CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, task TEXT, status INTEGER DEFAULT 0);
     """)
+    
+    # ئەم بەشە بۆ دڵنیابوونە لەوەی کۆڵۆنە نوێیەکان زیادکراون ئەگەر داتابەیسە کۆنەکە هەبوو
+    try: c.execute("ALTER TABLE users ADD COLUMN last_seen DATETIME DEFAULT CURRENT_TIMESTAMP")
+    except: pass
+    try: c.execute("ALTER TABLE users ADD COLUMN last_daily DATETIME DEFAULT NULL")
+    except: pass
+    try: c.execute("ALTER TABLE users ADD COLUMN refer_code TEXT")
+    except: pass
+    try: c.execute("ALTER TABLE users ADD COLUMN referred_by INTEGER")
+    except: pass
+
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('bot_status', 'on')")
     c.commit()
 
@@ -65,7 +76,7 @@ def add_credit(user_id, n):
     db().commit()
 
 def is_simple_admin(uid):
-    # سەرەتا لە کۆنفیگ چێک دەکات
+    # سەرەتا لە کۆنفیگ چێک دەکات (ئەگەر ئایدییەکەی تێدا دابنرابێت)
     if uid in getattr(config, 'SIMPLE_ADMINS', []):
         return True
     # دواتر لە داتابەیس چێک دەکات
@@ -73,8 +84,8 @@ def is_simple_admin(uid):
     return row is not None
 
 def spend_credit(user_id):
-    # ئەدمینی سادە کرێدیتی بێکۆتای هەیە
-    if is_simple_admin(user_id):
+    # ئەگەر ئەدمینی سەرەکی یان ئەدمینی سادە بێت، هەرگیز کرێدیتی لێ کەم نابێت
+    if is_simple_admin(user_id) or user_id == config.ADMIN_ID:
         return True
         
     row = db().execute("SELECT questions_left FROM credit WHERE user_id=?", (user_id,)).fetchone()
