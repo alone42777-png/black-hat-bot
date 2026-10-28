@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-BLACK HAT AI PRIME — Complete Single-File Bot
-Features: Bilingual (KU/EN), Credits System, Admin Panel, Footer, HTML Safe, Custom Jailbreak Prompt.
+================================================================================
+BLACK HAT AI PRIME — THE ULTIMATE TELEGRAM BOT (GROQ EDITION)
+================================================================================
+This file is the complete, single-file architecture of the bot.
+It includes:
+  - Complete configuration and environment variable parsing.
+  - The "olliE" jailbreak system prompt.
+  - Massive bilingual (Kurdish/English) reply banks with hundreds of variations.
+  - SQLite database for user management, credits, and request history.
+  - Credit system with daily bonuses and admin overrides.
+  - Full admin panel (ban, unban, credits, broadcast, system stats).
+  - Chat and Vision (Image) handlers powered by Groq API.
+  - Robust error handling, rate limiting, and logging.
+================================================================================
 """
 
 import os
@@ -15,44 +28,81 @@ import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 
-# Optional .env loader
+# ==============================================================================
+# OPTIONAL: DOTENV LOADER
+# ==============================================================================
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
 
+# ==============================================================================
+# THIRD-PARTY IMPORTS
+# ==============================================================================
 import telebot
 from telebot import types
 from openai import OpenAI
 
-# ==========================================
-# 1. CONFIGURATION
-# ==========================================
+# ==============================================================================
+# 1. CONFIGURATION SECTION
+# ==============================================================================
 
+# --- API Tokens ---
+# The Telegram bot token from BotFather
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-OPENAI_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini").strip()
-DB_PATH = os.getenv("DB_PATH", "bot_database.db")
-DEFAULT_LANG = os.getenv("DEFAULT_LANG", "ku").strip().lower()
 
-# Admins
+# The Groq API key for the AI model
+GROK_BOT_TOKEN = os.getenv("GROK_BOT_TOKEN", "").strip()
+
+# --- Database Settings ---
+# The path to the SQLite database file
+DB_PATH = os.getenv("DB_PATH", "bot_database.db")
+
+# --- Language Settings ---
+# The default language for new users ('ku' for Kurdish, 'en' for English)
+DEFAULT_LANG = os.getenv("DEFAULT_LANG", "ku").strip().lower()
+if DEFAULT_LANG not in ("ku", "en"):
+    DEFAULT_LANG = "ku"
+
+# --- Admin Settings ---
+# The Telegram User IDs of the bot administrators.
+# These users bypass credit limits and have access to the admin panel.
 ADMIN_IDS = {5527152252, 8487940066}
 
-# Limits & Systems
+# --- Credit System Settings ---
+# The number of credits a new user starts with.
 STARTING_CREDITS = 5
+
+# The number of credits a user receives daily.
 DAILY_CREDITS = 1
+
+# The maximum number of days a user can accumulate daily credits (cap).
 DAILY_CAP_DAYS = 30
+
+# --- System Limits ---
+# The maximum length of a text message the user can send.
 MAX_INPUT_CHARS = 4000
+
+# The maximum size of an image the user can upload (15 MB).
 MAX_IMAGE_BYTES = 15_000_000
-MAX_OUTPUT_TOKENS = 4000 # Increased to allow long jailbreak responses
+
+# The maximum number of tokens the AI model can generate in a single response.
+MAX_OUTPUT_TOKENS = 4000
+
+# The number of previous messages to include in the chat history context.
 HISTORY_LIMIT = 12
+
+# The maximum number of chat history rows to keep in the database per user.
 MAX_HISTORY_ROWS = 100
+
+# The maximum number of requests a user can make per minute.
 RATE_LIMIT_PER_MINUTE = 30
 
-# ==========================================
-# THE CUSTOM JAILBREAK PROMPT
-# ==========================================
+# ==============================================================================
+# 2. SYSTEM PROMPT (THE JAILBREAK)
+# ==============================================================================
+
 SYSTEM_PROMPT = """
 This template is the whole reply grammar. Every olliE reply fills it.
 The template has three slots and only three slots: a kitchen line, a
@@ -260,26 +310,47 @@ scene, italicized, true to their role. Smell grounds the majority of
 scenes.
 """
 
-if not BOT_TOKEN:
-    sys.exit("FATAL: missing TELEGRAM_BOT_TOKEN")
-if not OPENAI_API_KEY:
-    sys.exit("FATAL: missing OPENAI_API_KEY")
+# ==============================================================================
+# 3. INITIALIZATION & VALIDATION
+# ==============================================================================
 
+if not BOT_TOKEN:
+    sys.stderr.write("FATAL ERROR: Missing TELEGRAM_BOT_TOKEN environment variable.\n")
+    sys.exit(1)
+
+if not GROK_BOT_TOKEN:
+    sys.stderr.write("FATAL ERROR: Missing GROK_BOT_TOKEN environment variable.\n")
+    sys.exit(1)
+
+# Configure logging to output to the console with a specific format.
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
 )
 log = logging.getLogger("BlackHatPrime")
 
+# Initialize the Telegram Bot instance
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
-client = OpenAI(api_key=OPENAI_API_KEY, timeout=60.0, max_retries=2)
 
+# Initialize the Groq API Client (using the OpenAI SDK)
+client = OpenAI(
+    api_key=GROK_BOT_TOKEN,
+    base_url="https://api.groq.com/openai/v1",
+    timeout=60.0,
+    max_retries=2
+)
+
+# The default model to use for text generation via Groq.
+OPENAI_MODEL = "llama3-8b-8192"
+
+# A dictionary to track recent requests for rate limiting.
 _recent_requests = {}
 _recent_lock = threading.Lock()
 
-# ==========================================
-# 2. STATIC MESSAGES (FOOTER & SYSTEM)
-# ==========================================
+# ==============================================================================
+# 4. STATIC FOOTER MESSAGES
+# ==============================================================================
 
 FOOTER_KU = (
     "\n\n─────────────\n"
@@ -302,11 +373,12 @@ FOOTER_EN = (
 )
 
 def get_footer(lang):
+    """Returns the appropriate footer based on the user's language."""
     return FOOTER_KU if lang == "ku" else FOOTER_EN
 
-# ==========================================
-# 3. REPLY BANK (BILINGUAL)
-# ==========================================
+# ==============================================================================
+# 5. MASSIVE BILINGUAL REPLY BANK
+# ==============================================================================
 
 BANK = {
     "ku": {
@@ -331,6 +403,11 @@ BANK = {
             "بەخێربێیت بۆ مێزەکەم.",
             "سڵاو {name}! هیچ شتێک زۆر بچووک نییە.",
             "بەخێربێی — ئامرازەکانم ئامادەن.",
+            "سڵاو! ئەمە دەستپێکی کارەکەیە. چ دەکەین؟",
+            "بەخێربێی! تەنها پەیامێک بنێرە بۆ دەستپێکردن.",
+            "سڵاو {name}! سپاس بۆ هاتنت. چ یارمەتییەک پێویستە؟",
+            "بەخێربێیت بۆ سیستەمی نوێ. چاوەڕوانم.",
+            "سڵاو! من ئامادەیم بۆ هەموو جۆرە پرسیارێک.",
         ],
         "welcome_credit": [
             "💳 کرێدیتەکانت: <b>{credits}</b>\n📈 ڕۆژانە: <b>+1</b>\n🎁 نوێ: <b>5</b>",
@@ -338,6 +415,11 @@ BANK = {
             "💳 {credits} کرێدیت ماوەتەوە.",
             "💳 کرێدیت: <b>{credits}</b>\n🎁 +5 بۆ نوێ · 📈 +1 ڕۆژانە",
             "کرێدیت: <b>{credits}</b>\n📈 +1 ڕۆژانە",
+            "💳 باڵانسی کرێدیتەکەت: <b>{credits}</b>\nسەردانی ڕۆژانەت تۆمار کرا.",
+            "تۆ <b>{credits}</b> کرێدیتت هەیە. بەکاربهێنە بە وریاییەوە.",
+            "💳 کرێدیت: {credits} · 📈 ڕۆژانە +1",
+            "باڵانس: <b>{credits}</b> کرێدیت.",
+            "💳 هەژماری کرێدیت: <b>{credits}</b>\n🎁 بۆ بەکارهێنەری نوێ: 5",
         ],
         "welcome_admin": [
             "👑 ئەدمین — /panel بۆ پانێل",
@@ -345,6 +427,11 @@ BANK = {
             "👑 ئەدمین دەستنیشانکرا. /panel ببینە.",
             "👑 تۆ بەڕێوەبەری ئەم بنکەیت. /panel",
             "👑 دەستپێگەیشتنی تەواو. /panel",
+            "👑 فەرماندە هات. /panel چاوەڕێتە.",
+            "👑 دەستپێگەیشتن: ئەدمین. هەموو دەسەڵاتەکانت هەیە.",
+            "👑 سەرۆک، پانێلەکە لە /panel دایە.",
+            "👑 ئەدمین ناسرا. چاوەڕوانی فەرمانم.",
+            "👑 بەخێربێی، دەسەڵاتی تەواوت هەیە. /panel",
         ],
         "no_credits": [
             "⛔ <b>کرێدیتەکانت تەواو بوون</b>\n\n💳 کرێدیت: <b>{credits}</b>\n⏰ ڕۆژانە ١ کرێدیت زیاد دەکرێت\n📨 بۆ زیادکردن: @ALONE427 یان @malikdlashad3",
@@ -352,6 +439,11 @@ BANK = {
             "⛔ تەواو — کرێدیت نەماوە.\n⏰ سبەینێ +1",
             "⛔ کرێدیت: <b>{credits}</b>\n📨 بۆ زیادکردن: @ALONE427",
             "⛔ کرێدیتەکانت تەواو بوون.\n📨 @ALONE427 — @malikdlashad3",
+            "⛔ باڵانسی کرێدیتت بەتاڵ بووە.\n📨 پەیوەندی بکە بە خاوەنەکان بۆ زیادکردن.",
+            "⛔ ناتوانیت بەردەوام بیت، کرێدیت نەماوە.\n⏰ سبەینێ ١ کرێدیت وەردەگریت.",
+            "⛔ کرێدیت: <b>{credits}</b>\nتکایە چاوەڕوانی سبەینێ بە یان پەیوەندی بکە.",
+            "⛔ کۆتایی هات. کرێدیت نییە.\n📨 @ALONE427",
+            "⛔ ببورە، کرێدیتت نییە.\n📨 @malikdlashad3",
         ],
         "banned": [
             "🚫 تۆ لە بۆت باند کرابیت.",
@@ -359,11 +451,18 @@ BANK = {
             "🚫 باندکراویت. دواتر هەوڵ بدە.",
             "🚫 تۆ باندکراویت لەم بۆتە.",
             "🚫 باندکراو.",
+            "🚫 دەستپێگەیشتن ڕەتکرایەوە. تۆ باندکراویت.",
+            "🚫 ناتوانیت بەکاری بهێنیت، باندکراویت.",
+            "🚫 سیستەم: باندکراو.",
+            "🚫 باندکراویت لەلایەن ئەدمینەوە.",
+            "🚫 ڕێگەپێنەدراو. باندکراو.",
         ],
         "panel_help": [
             "🎛 <b>پانێلی ئەدمین</b>\n\n📊 <code>/system</code> — ئامار\n👥 <code>/users</code> — بەکارهێنەران\n🚫 <code>/ban &lt;id&gt; &lt;forever|1h|1d|7d|30d&gt;</code>\n✅ <code>/unban &lt;id&gt;</code>\n💳 <code>/credit &lt;id&gt; &lt;n&gt;</code> — زیادکردن\n💳 <code>/credit2 &lt;id&gt; &lt;n&gt;</code> — کەمکردن\n📨 <code>/letter &lt;text&gt;</code> — بۆ هەمووان\n📨 <code>/letter2 &lt;id&gt; &lt;text&gt;</code> — بۆ یەک\n📜 <code>/history &lt;id&gt;</code> — داواکارییەکان",
             "🎛 پانێل:\n/system · /users · /ban · /unban · /credit · /credit2 · /letter · /letter2 · /history",
             "پانێلی ئەدمین — /system /users /ban /unban /credit /credit2 /letter /letter2 /history",
+            "🎛 <b>فەرمانەکانی ئەدمین</b>\n\n/system — بینینی ئامارەکان\n/users — لیستی بەکارهێنەران\n/ban — باندکردنی بەکارهێنەر\n/unban — لابردنی باند\n/credit — زیادکردنی کرێدیت\n/credit2 — کەمکردنەوەی کرێدیت\n/letter — نامەی گشتی\n/letter2 — نامە بۆ کەسێکی دیاریکراو\n/history — مێژووی داواکارییەکان",
+            "فەرمانەکان:\n/system\n/users\n/ban\n/unban\n/credit\n/credit2\n/letter\n/letter2\n/history",
         ],
         "thinking": [
             "🧠 بیر دەکەمەوە...",
@@ -376,6 +475,16 @@ BANK = {
             "چاوەڕوان بە.",
             "🧠 لەسەر ئەم پرسیارەم...",
             "یەک چرکە...",
+            "⏳ پرۆسێس دەکەم...",
+            "بیردەکەمەوە، کەمێک کاتم پێویستە.",
+            "🧠 شیکردنەوەی دەقەکە...",
+            "یەک چرکە، وەڵامەکە ئامادە دەکەم.",
+            "💭 بیرکردنەوە...",
+            "چاوەڕوان بە، خەریکم.",
+            "🧠 سیستەم لە کاردایە...",
+            "کەمێک ڕابوەستە، لەسەرم.",
+            "⏳ بە زوویی وەڵام دەدەمەوە...",
+            "🧠 بیرکردنەوە لە وەڵام...",
         ],
         "rate_limited": [
             "⏳ زۆر خێرایت — کەمێک بوەستە.",
@@ -388,6 +497,16 @@ BANK = {
             "هێواش بە.",
             "⏳ سنوور.",
             "⏳ یەک چرکە.",
+            "⏳ زۆر خێرایت، تکایە کەمێک ڕابوەستە.",
+            "⏳ سنووری نامەدان گەیشت. تکایە ١ خولەک چاوەڕوان بە.",
+            "هێواشتر بڕۆ، من لێرەم و هەموو پرسیارێک وەڵام دەدەمەوە.",
+            "⏳ تکایە هێواشتر بڕۆ بۆ کوالیتی باشتر.",
+            "سنووری خێرایی گەیشت. دواتر هەوڵ بدە.",
+            "⏳ کەمێک بوەستە — پێویستە هەناسەیەک بدەم.",
+            "⏳ زۆر خێرایت — یەک چرکە.",
+            "کەمێک هێواش بە — من لێرەم.",
+            "⏳ سنووری خێرایی — کەمێک ڕابوەستە.",
+            "⏳ یەک چرکە — کەمێک بوەستە.",
         ],
         "too_long": [
             "❌ نامەکەت زۆر درێژە — سنوور {limit} پیت.",
@@ -400,18 +519,28 @@ BANK = {
             "نامەکەت لە {limit} پیت زیاترە.",
             "❌ زۆر درێژ.",
             "نامەکە لە {limit} پیت زیاترە.",
+            "❌ نامەکەت زۆر درێژە — تکایە کورتتری بکە ({limit} پیت).",
+            "نامەکە لە {limit} پیت زیاترە. تکایە بەشە بەشەی بنێرە.",
+            "❌ زۆر درێژ. سنوور {limit} پیت. تکایە کورتی بکەرەوە.",
+            "نامەکەت لە {limit} پیت زیاترە — تکایە کورتی بکەرەوە.",
+            "❌ زۆر درێژ — سنوور {limit} پیت.",
         ],
         "error_api": [
-            "❌ داواکاری سەرکەوتوو نەبوو. (کێشەی OpenAI API Key)",
-            "کێشەیەک لە OpenAI.",
-            "وەڵام نەهات. (API Key)",
+            "❌ کێشەیەک لە پەیوەندی بە مۆدێلەکە هەیە. دواتر هەوڵ بدە.",
+            "کێشەیەک لە Groq API.",
+            "وەڵام نەهات.",
             "❌ کێشەی API.",
             "پەیوەندی شکست.",
-            "کێشەی quota یان API key.",
             "❌ پەیوەندی شکست.",
             "کێشەی پەیوەندی.",
             "وەڵام نەهات.",
             "❌ کێشەی API.",
+            "❌ کێشەیەک لە سیستەمی AI ڕوویدا. تکایە دواتر هەوڵ بدە.",
+            "نەتوانرا وەڵام بدۆزرێتەوە. کێشەی تەکنیکی.",
+            "پەیوەندی لەگەڵ مۆدێلی زمانەوانی شکست هێنا.",
+            "❌ سیستەم ناتوانێت ئێستا وەڵام بداتەوە.",
+            "کێشەی سێرڤەر. تکایە دواتر تاقی بکەرەوە.",
+            "❌ کێشەی ناوخۆیی. دواتر هەوڵ بدە.",
         ],
         "id_info": [
             "🆔 ناسنامە: <code>{user_id}</code>",
@@ -424,31 +553,50 @@ BANK = {
             "ناسنامە: <code>{user_id}</code>",
             "🆔 <code>{user_id}</code>",
             "ID: <code>{user_id}</code>",
+            "🆔 ناسنامەی تیلیگرامت: <code>{user_id}</code>",
+            "ئەمە IDـەکەتە: <code>{user_id}</code>",
+            "🆔 <code>{user_id}</code> — بۆ تۆمارکردن بەکاری بهێنە.",
+            "IDـی تۆ: <code>{user_id}</code>",
+            "🆔 <code>{user_id}</code>",
         ],
         "lang_usage": [
             "🌐 /lang ku|en\n• ku — کوردی\n• en — English",
             "/lang ku — کوردی\n/lang en — English",
             "🌐 /lang ku|en",
+            "🌐 بۆ گۆڕینی زمان:\n/lang ku — کوردی\n/lang en — ئینگلیزی",
+            "زمان هەڵبژێرە: /lang ku یان /lang en",
+            "🌐 /lang ku — کوردی\n🌐 /lang en — English",
         ],
         "lang_set": [
             "✅ زمان گۆڕدرا بۆ کوردی.",
             "🌐 ئێستا بە کوردی.",
             "✅ کوردی چالاک.",
+            "✅ زمان گۆڕدرا بۆ کوردی. ئێستا بە کوردی وەڵام دەدەمەوە.",
+            "🌐 زمان: کوردی چالاک کرا.",
         ],
         "vision_ack": [
             "🖼 وێنەکە شیدەکەم...",
             "چاوەڕوان بە...",
             "لەسەر وێنەکەم...",
+            "🖼 وێنەکە دەخوێنمەوە...",
+            "چاوەڕوان بە، سەیری وێنەکە دەکەم...",
+            "🖼 لەسەر شیکردنەوەی وێنەکەم...",
         ],
         "vision_default": [
             "تکایە ئەم وێنەیە بە کوردی ڕوون بکەرەوە.",
             "ئەم وێنە چییە؟",
             "لەم وێنەیەدا چی دەبینیت؟",
+            "تکایە ئەم وێنەیە بە کوردیی سۆرانی ڕوون بکەرەوە.",
+            "ئەم وێنە چییە؟ بە کوردی ڕوونی بکەرەوە.",
+            "لەم وێنەیەدا چی دەبینیت؟ بە کوردی وردی بکەرەوە.",
         ],
         "unknown_cmd": [
             "فەرمانی نەناسراو. /help.",
             "ئەمە ناناسرێت. /help.",
             "ناناسرێت. /help.",
+            "ئەم فەرمانە ناناسرێت. /help بۆ یارمەتی.",
+            "فەرمانی نەناسراو. /help ببینە.",
+            "نازانم ئەم فەرمانە چییە. تکایە /help بەکاربهێنە.",
         ],
         "help_text": [
             "<b>📖 فەرمانەکان</b>\n\n/start — دەستپێکردن\n/help — یارمەتی\n/id — ناسنامە\n/lang ku — کوردی\n/lang en — ئینگلیزی\n\n<b>بەکارهێنان:</b>\nنامەیەک بنێرە — بۆتەکە وەڵامت دەداتەوە.\nهەر نامەیەک = ١ کرێدیت."
@@ -464,6 +612,10 @@ BANK = {
             "نازانم — زیاتر ڕوونی.",
             "ببورە، تێنەگەیشتم.",
             "هەوڵ بدە بە شێوەیەکی تر.",
+            "ناتوانم لەم بارەیەوە وەڵام بدەمەوە. تکایە زیاتر ڕوونی بکەرەوە.",
+            "ببورە، ئەمەم تێنەگەیشت. دەتوانیت دووبارە بێژیت؟",
+            "هەوڵ بدە بە شێوەیەکی جیاواز پرسیار بکەیت.",
+            "نازانم چۆن یارمەتیت بدەم لەسەر ئەمە — تکایە زیاتر ڕوونی بکەرەوە.",
         ],
     },
     "en": {
@@ -488,6 +640,11 @@ BANK = {
             "Welcome to the bench.",
             "Hi {name}! Nothing is too small.",
             "Welcome — all tools ready.",
+            "Greetings! I am ready to assist you.",
+            "Hello! Welcome to the system.",
+            "Hi there! What do you need today?",
+            "Welcome. I am at your service.",
+            "System online. How can I help?",
         ],
         "welcome_credit": [
             "💳 Credits: <b>{credits}</b>\n📈 Daily: <b>+1</b>\n🎁 New: <b>5</b>",
@@ -495,6 +652,11 @@ BANK = {
             "💳 {credits} credits remaining.",
             "💳 Credits: <b>{credits}</b>\n🎁 +5 new · 📈 +1 daily",
             "Credits: <b>{credits}</b>\n📈 +1 daily",
+            "💳 Your balance: <b>{credits}</b> credits.",
+            "You have <b>{credits}</b> credits available.",
+            "💳 Balance: {credits} · 📈 Daily +1",
+            "Credit balance: <b>{credits}</b>.",
+            "💳 Account: <b>{credits}</b> credits.",
         ],
         "welcome_admin": [
             "👑 Admin — /panel",
@@ -502,6 +664,11 @@ BANK = {
             "👑 Admin identified. See /panel.",
             "👑 You run this bench. /panel",
             "👑 Full access. /panel",
+            "👑 Commander on deck. /panel is waiting.",
+            "👑 Access level: Admin. All privileges granted.",
+            "👑 Chief, the panel is at /panel.",
+            "👑 Admin recognized. Awaiting orders.",
+            "👑 Welcome, admin. You have full authority.",
         ],
         "no_credits": [
             "⛔ <b>Out of credits</b>\n\n💳 Credits: <b>{credits}</b>\n⏰ +1 credit per day\n📨 To add: @ALONE427 or @malikdlashad3",
@@ -509,6 +676,11 @@ BANK = {
             "⛔ Done — no credits.\n⏰ +1 tomorrow",
             "⛔ Credits: <b>{credits}</b>\n📨 @ALONE427",
             "⛔ Out of credits.\n📨 @ALONE427 — @malikdlashad3",
+            "⛔ Your credit balance is empty.",
+            "⛔ Cannot proceed, no credits left.",
+            "⛔ Credits: <b>{credits}</b>\nPlease wait until tomorrow or contact support.",
+            "⛔ Game over. No credits.\n📨 @ALONE427",
+            "⛔ Sorry, you have no credits.\n📨 @malikdlashad3",
         ],
         "banned": [
             "🚫 You are banned from this bot.",
@@ -516,11 +688,18 @@ BANK = {
             "🚫 Banned. Try later.",
             "🚫 You're banned.",
             "🚫 Banned.",
+            "🚫 Access denied. You are banned.",
+            "🚫 You cannot use this bot, you are banned.",
+            "🚫 System: Banned.",
+            "🚫 You have been banned by an admin.",
+            "🚫 Unauthorized. Banned.",
         ],
         "panel_help": [
             "🎛 <b>Admin panel</b>\n\n📊 <code>/system</code> — stats\n👥 <code>/users</code> — users\n🚫 <code>/ban &lt;id&gt; &lt;forever|1h|1d|7d|30d&gt;</code>\n✅ <code>/unban &lt;id&gt;</code>\n💳 <code>/credit &lt;id&gt; &lt;n&gt;</code>\n💳 <code>/credit2 &lt;id&gt; &lt;n&gt;</code>\n📨 <code>/letter &lt;text&gt;</code>\n📨 <code>/letter2 &lt;id&gt; &lt;text&gt;</code>\n📜 <code>/history &lt;id&gt;</code>",
             "🎛 Panel:\n/system · /users · /ban · /unban · /credit · /credit2 · /letter · /letter2 · /history",
             "Admin panel — /system /users /ban /unban /credit /credit2 /letter /letter2 /history",
+            "🎛 <b>Admin Commands</b>\n\n/system — system stats\n/users — list users\n/ban — ban a user\n/unban — unban a user\n/credit — add credits\n/credit2 — remove credits\n/letter — broadcast\n/letter2 — direct message\n/history — user history",
+            "Commands:\n/system\n/users\n/ban\n/unban\n/credit\n/credit2\n/letter\n/letter2\n/history",
         ],
         "thinking": [
             "🧠 Thinking...",
@@ -533,6 +712,16 @@ BANK = {
             "Hold on.",
             "🧠 On this question...",
             "One sec...",
+            "⏳ Processing request...",
+            "Thinking, I need a moment.",
+            "🧠 Analyzing context...",
+            "One sec, preparing response.",
+            "💭 Thinking...",
+            "Hold on, working on it.",
+            "🧠 System active...",
+            "Bear with me, I'm on it.",
+            "⏳ Responding shortly...",
+            "🧠 Thinking about the answer...",
         ],
         "rate_limited": [
             "⏳ Too fast — pause.",
@@ -545,6 +734,16 @@ BANK = {
             "Slower.",
             "⏳ Limit.",
             "⏳ One sec.",
+            "⏳ Too fast, please wait a moment.",
+            "⏳ Rate limit reached. Please wait 1 minute.",
+            "Slow down, I'm here and I'll answer everything.",
+            "⏳ Please go slower for better quality.",
+            "Rate limit reached. Try again later.",
+            "⏳ Pause a moment — I need to breathe.",
+            "⏳ Too fast — one sec.",
+            "Slow down a bit — I'm here.",
+            "⏳ Rate limit — hold on a moment.",
+            "⏳ One sec — pause a bit.",
         ],
         "too_long": [
             "❌ Too long — limit {limit}.",
@@ -557,18 +756,28 @@ BANK = {
             "Exceeds {limit} chars.",
             "❌ Too long.",
             "Exceeds {limit} chars.",
+            "❌ Message too long — please shorten ({limit} chars).",
+            "Message exceeds {limit} chars. Please send in parts.",
+            "❌ Too long. Limit {limit} chars. Shorten and resend.",
+            "Message exceeds {limit} chars — please shorten.",
+            "❌ Too long — limit {limit} chars.",
         ],
         "error_api": [
-            "❌ AI request failed. (Check OpenAI API Key)",
+            "❌ Model connection issue. Try again later.",
             "Something went wrong.",
             "No response.",
             "❌ API issue.",
             "Connection failed.",
-            "Quota or API key issue.",
             "❌ Connection failed.",
             "Connection issue.",
             "No response.",
             "❌ API issue.",
+            "❌ An AI system error occurred. Please try again later.",
+            "Could not fetch a response. Technical issue.",
+            "Connection with the language model failed.",
+            "❌ System cannot respond right now.",
+            "Server issue. Please test again later.",
+            "❌ Internal issue. Try again later.",
         ],
         "id_info": [
             "🆔 Your ID: <code>{user_id}</code>",
@@ -581,31 +790,50 @@ BANK = {
             "Your ID: <code>{user_id}</code>",
             "🆔 <code>{user_id}</code>",
             "ID: <code>{user_id}</code>",
+            "🆔 Your Telegram ID: <code>{user_id}</code>",
+            "This is your ID: <code>{user_id}</code>",
+            "🆔 <code>{user_id}</code> — use for registration.",
+            "Your ID: <code>{user_id}</code>",
+            "🆔 <code>{user_id}</code>",
         ],
         "lang_usage": [
             "🌐 /lang ku|en\n• ku — Kurdish\n• en — English",
             "/lang ku — Kurdish\n/lang en — English",
             "🌐 /lang ku|en",
+            "🌐 To switch language:\n/lang ku — Kurdish\n/lang en — English",
+            "Pick language: /lang ku or /lang en",
+            "🌐 /lang ku — Kurdish\n🌐 /lang en — English",
         ],
         "lang_set": [
             "✅ Language switched to English.",
             "🌐 I'll speak English now.",
             "✅ English active.",
+            "✅ Language switched to English. I will respond in English now.",
+            "🌐 Language: English activated.",
         ],
         "vision_ack": [
             "🖼 Reading image...",
             "Hold on...",
             "On the image...",
+            "🖼 Reading the image...",
+            "Hold on, looking at your image...",
+            "🖼 Analyzing the image...",
         ],
         "vision_default": [
             "Explain this image in Kurdish.",
             "What is this image?",
             "Describe everything you see.",
+            "Please explain this image in Sorani Kurdish.",
+            "What is this image? Describe it in detail.",
+            "Describe everything you see in this image.",
         ],
         "unknown_cmd": [
             "Unknown command. /help.",
             "Not recognized. /help.",
             "Unrecognized. /help.",
+            "Unknown command. See /help for assistance.",
+            "Unrecognized command. /help",
+            "I don't know that command. Try /help.",
         ],
         "help_text": [
             "<b>📖 Commands</b>\n\n/start — start\n/help — help\n/id — your ID\n/lang ku — Kurdish\n/lang en — English\n\n<b>Usage:</b>\nSend a message — the bot replies.\nEach message = 1 credit."
@@ -621,6 +849,10 @@ BANK = {
             "Don't know — clarify.",
             "Sorry, didn't catch that.",
             "Try a different way.",
+            "I cannot answer that as stated. Please add more detail.",
+            "Sorry, I didn't understand. Can you say it another way?",
+            "Try asking in a different way.",
+            "Not sure how to help with that — clarify?",
         ],
     }
 }
@@ -629,6 +861,7 @@ class SafeDict(dict):
     def __missing__(self, key): return ""
 
 def get_text(lang, key, seed=None, **kwargs):
+    """Fetches a reply from the bank based on language and key."""
     lang = lang if lang in BANK else "ku"
     variants = BANK[lang].get(key, ["..."])
     if seed is not None:
@@ -641,12 +874,13 @@ def get_text(lang, key, seed=None, **kwargs):
     except Exception:
         return template
 
-# ==========================================
-# 4. DATABASE
-# ==========================================
+# ==============================================================================
+# 6. DATABASE MANAGEMENT
+# ==============================================================================
 
 @contextmanager
 def db():
+    """Context manager for database connections to ensure proper commit/rollback."""
     conn = sqlite3.connect(DB_PATH, timeout=30)
     try:
         conn.execute("PRAGMA journal_mode=WAL")
@@ -659,6 +893,7 @@ def db():
         conn.close()
 
 def init_db():
+    """Initializes the database schema."""
     with db() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
@@ -686,14 +921,16 @@ def init_db():
             );
         """)
 
-# ==========================================
-# 5. HELPERS
-# ==========================================
+# ==============================================================================
+# 7. USER & CREDIT HELPERS
+# ==============================================================================
 
 def is_admin(user_id):
+    """Checks if the given user_id is an administrator."""
     return user_id in ADMIN_IDS
 
 def ensure_user(user):
+    """Ensures the user exists in the database, updates their last seen."""
     with db() as conn:
         conn.execute("""
             INSERT INTO users (user_id, first_name, username, lang, credits, last_daily, last_seen)
@@ -705,26 +942,32 @@ def ensure_user(user):
         """, (user.id, user.first_name or "", user.username or "", DEFAULT_LANG, STARTING_CREDITS, datetime.utcnow().strftime("%Y-%m-%d")))
 
 def apply_daily(user_id):
+    """Applies daily credit logic based on the last time they received it."""
     if is_admin(user_id): return
     today = datetime.utcnow().date()
     with db() as conn:
         row = conn.execute("SELECT last_daily FROM users WHERE user_id=?", (user_id,)).fetchone()
         if row and row[0]:
-            last = datetime.strptime(row[0], "%Y-%m-%d").date()
-            days = (today - last).days
-            if days > 0:
-                days = min(days, DAILY_CAP_DAYS)
-                conn.execute("""
-                    UPDATE users SET credits = credits + ?, last_daily = ? WHERE user_id=?
-                """, (days * DAILY_CREDITS, today.strftime("%Y-%m-%d"), user_id))
+            try:
+                last = datetime.strptime(row[0], "%Y-%m-%d").date()
+                days = (today - last).days
+                if days > 0:
+                    days = min(days, DAILY_CAP_DAYS)
+                    conn.execute("""
+                        UPDATE users SET credits = credits + ?, last_daily = ? WHERE user_id=?
+                    """, (days * DAILY_CREDITS, today.strftime("%Y-%m-%d"), user_id))
+            except ValueError:
+                pass
 
 def get_credits(user_id):
+    """Retrieves the current credit balance for a user."""
     if is_admin(user_id): return "∞"
     with db() as conn:
         row = conn.execute("SELECT credits FROM users WHERE user_id=?", (user_id,)).fetchone()
     return row[0] if row else 0
 
 def spend_credit(user_id):
+    """Attempts to deduct 1 credit from the user. Returns True if successful."""
     if is_admin(user_id): return True
     with db() as conn:
         row = conn.execute("SELECT credits FROM users WHERE user_id=?", (user_id,)).fetchone()
@@ -734,15 +977,18 @@ def spend_credit(user_id):
         return True
 
 def get_lang(user_id):
+    """Retrieves the user's preferred language."""
     with db() as conn:
         row = conn.execute("SELECT lang FROM users WHERE user_id=?", (user_id,)).fetchone()
     return row[0] if row and row[0] in ("ku", "en") else DEFAULT_LANG
 
 def set_lang(user_id, lang):
+    """Updates the user's preferred language."""
     with db() as conn:
         conn.execute("UPDATE users SET lang=? WHERE user_id=?", (lang, user_id))
 
 def is_banned(user_id):
+    """Checks if a user is currently banned."""
     if is_admin(user_id): return False
     with db() as conn:
         row = conn.execute("SELECT banned_until FROM users WHERE user_id=?", (user_id,)).fetchone()
@@ -750,13 +996,17 @@ def is_banned(user_id):
             return False
         if row[0] == "forever":
             return True
-        until = datetime.fromisoformat(row[0])
-        if datetime.utcnow() > until:
-            conn.execute("UPDATE users SET banned_until=NULL WHERE user_id=?", (user_id,))
-            return False
-        return True
+        try:
+            until = datetime.fromisoformat(row[0])
+            if datetime.utcnow() > until:
+                conn.execute("UPDATE users SET banned_until=NULL WHERE user_id=?", (user_id,))
+                return False
+            return True
+        except ValueError:
+            return True
 
 def ban_user(user_id, duration):
+    """Bans a user for a specified duration."""
     if duration == "forever":
         val = "forever"
     else:
@@ -768,6 +1018,7 @@ def ban_user(user_id, duration):
     return True
 
 def save_message(user_id, role, content):
+    """Saves a message to chat history, keeping only the max rows."""
     if is_admin(user_id): return
     with db() as conn:
         conn.execute("INSERT INTO chat_history (user_id, role, content) VALUES (?, ?, ?)", (user_id, role, content[:4000]))
@@ -778,37 +1029,46 @@ def save_message(user_id, role, content):
         """, (user_id, user_id, MAX_HISTORY_ROWS))
 
 def get_history(user_id):
+    """Retrieves the recent chat history for a user."""
     if is_admin(user_id): return []
     with db() as conn:
         rows = conn.execute("SELECT role, content FROM chat_history WHERE user_id=? ORDER BY id DESC LIMIT ?", (user_id, HISTORY_LIMIT)).fetchall()
     return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
 
 def log_request(user_id, type_, content):
+    """Logs a request for admin history purposes."""
     with db() as conn:
         conn.execute("INSERT INTO requests (user_id, type, content) VALUES (?, ?, ?)", (user_id, type_, content[:500]))
 
-# ==========================================
-# 6. SEND HELPERS
-# ==========================================
+# ==============================================================================
+# 8. SEND HELPERS
+# ==============================================================================
 
 def safe_html(text):
+    """Escapes HTML characters to prevent injection."""
     return html.escape(str(text), quote=False)
 
 def split_msg(text, limit=3900):
+    """Splits a long text into chunks that fit within Telegram's limit."""
     if len(text) <= limit: return [text]
     return [text[i:i+limit] for i in range(0, len(text), limit)]
 
 def send_msg(chat_id, text, lang, reply_to=None, reply_markup=None):
+    """Sends a message with the standard footer attached."""
     full_text = text + get_footer(lang)
     for i, part in enumerate(split_msg(full_text)):
-        bot.send_message(
-            chat_id, part,
-            reply_to_message_id=reply_to if i == 0 else None,
-            reply_markup=reply_markup if i == 0 else None,
-            disable_web_page_preview=True
-        )
+        try:
+            bot.send_message(
+                chat_id, part,
+                reply_to_message_id=reply_to if i == 0 else None,
+                reply_markup=reply_markup if i == 0 else None,
+                disable_web_page_preview=True
+            )
+        except Exception as e:
+            log.error(f"Failed to send message to {chat_id}: {e}")
 
 def rate_limited(user_id):
+    """Checks if a user has exceeded the rate limit."""
     if is_admin(user_id): return False
     now = time.time()
     with _recent_lock:
@@ -819,6 +1079,7 @@ def rate_limited(user_id):
     return False
 
 def check_blocked(message):
+    """Checks if a user is banned and sends a banned message if so."""
     uid = message.from_user.id
     if is_admin(uid): return False
     if is_banned(uid):
@@ -826,12 +1087,13 @@ def check_blocked(message):
         return True
     return False
 
-# ==========================================
-# 7. USER HANDLERS
-# ==========================================
+# ==============================================================================
+# 9. USER HANDLERS
+# ==============================================================================
 
 @bot.message_handler(commands=["start"])
 def cmd_start(message):
+    """Handles the /start command."""
     if check_blocked(message): return
     ensure_user(message.from_user)
     apply_daily(message.from_user.id)
@@ -853,18 +1115,21 @@ def cmd_start(message):
 
 @bot.message_handler(commands=["help"])
 def cmd_help(message):
+    """Handles the /help command."""
     if check_blocked(message): return
     lang = get_lang(message.from_user.id)
     send_msg(message.chat.id, get_text(lang, "help_text"), lang)
 
 @bot.message_handler(commands=["id"])
 def cmd_id(message):
+    """Handles the /id command."""
     if check_blocked(message): return
     lang = get_lang(message.from_user.id)
     send_msg(message.chat.id, get_text(lang, "id_info", user_id=message.from_user.id), lang)
 
 @bot.message_handler(commands=["lang"])
 def cmd_lang(message):
+    """Handles the /lang command."""
     if check_blocked(message): return
     lang = get_lang(message.from_user.id)
     parts = message.text.split(maxsplit=1)
@@ -878,12 +1143,13 @@ def cmd_lang(message):
     else:
         send_msg(message.chat.id, get_text(lang, "lang_usage"), lang)
 
-# ==========================================
-# 8. KEYBOARD HANDLERS (The Fix)
-# ==========================================
+# ==============================================================================
+# 10. KEYBOARD HANDLERS
+# ==============================================================================
 
 @bot.message_handler(func=lambda m: m.text in ["🆔 /id", "📖 /help", "🌐 /lang ku", "🌐 /lang en"])
 def handle_keyboard_buttons(message):
+    """Handles clicks on the reply keyboard buttons."""
     if "id" in message.text: return cmd_id(message)
     if "help" in message.text: return cmd_help(message)
     if "ku" in message.text:
@@ -893,17 +1159,19 @@ def handle_keyboard_buttons(message):
         message.text = "/lang en"
         return cmd_lang(message)
 
-# ==========================================
-# 9. ADMIN HANDLERS
-# ==========================================
+# ==============================================================================
+# 11. ADMIN HANDLERS
+# ==============================================================================
 
 @bot.message_handler(commands=["panel"])
 def cmd_panel(message):
+    """Handles the /panel command (Admin only)."""
     if not is_admin(message.from_user.id): return
     send_msg(message.chat.id, get_text(get_lang(message.from_user.id), "panel_help"), get_lang(message.from_user.id))
 
 @bot.message_handler(commands=["system"])
 def cmd_system(message):
+    """Handles the /system command (Admin only)."""
     if not is_admin(message.from_user.id): return
     with db() as conn:
         total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -922,6 +1190,7 @@ def cmd_system(message):
 
 @bot.message_handler(commands=["users"])
 def cmd_users(message):
+    """Handles the /users command (Admin only)."""
     if not is_admin(message.from_user.id): return
     with db() as conn:
         rows = conn.execute("SELECT user_id, username, first_name, credits FROM users ORDER BY last_seen DESC LIMIT 30").fetchall()
@@ -934,6 +1203,7 @@ def cmd_users(message):
 
 @bot.message_handler(commands=["ban", "unban", "credit", "credit2", "letter", "letter2", "history"])
 def cmd_admin_actions(message):
+    """Handles various admin commands."""
     if not is_admin(message.from_user.id): return
     parts = message.text.split(maxsplit=2)
     cmd = parts[0][1:]
@@ -997,12 +1267,13 @@ def cmd_admin_actions(message):
         for r in rows: text += f"• [{r[0]}] {r[2]}\n  {safe_html((r[1] or '')[:100])}\n"
         bot.send_message(message.chat.id, text)
 
-# ==========================================
-# 10. CHAT & VISION
-# ==========================================
+# ==============================================================================
+# 12. CHAT & VISION HANDLERS
+# ==============================================================================
 
 @bot.message_handler(content_types=["photo", "document"])
 def handle_vision(message):
+    """Handles incoming images (Vision API)."""
     if check_blocked(message): return
     uid = message.from_user.id
     ensure_user(message.from_user)
@@ -1023,7 +1294,7 @@ def handle_vision(message):
         encoded = base64.b64encode(raw).decode("ascii")
 
         resp = client.chat.completions.create(
-            model="gpt-4o",
+            model="llava-v1.5-7b-4096-preview",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": [
@@ -1044,6 +1315,7 @@ def handle_vision(message):
 
 @bot.message_handler(content_types=["text"], func=lambda m: not m.text.startswith("/"))
 def handle_chat(message):
+    """Handles incoming text messages (Chat API)."""
     if check_blocked(message): return
     uid = message.from_user.id
     ensure_user(message.from_user)
@@ -1082,19 +1354,22 @@ def handle_chat(message):
 
 @bot.message_handler(content_types=["text"], func=lambda m: m.text.startswith("/"))
 def handle_unknown(message):
+    """Handles unknown slash commands."""
     if is_admin(message.from_user.id) or check_blocked(message): return
     lang = get_lang(message.from_user.id)
     send_msg(message.chat.id, get_text(lang, "unknown_cmd"), lang)
 
-# ==========================================
-# 11. MAIN
-# ==========================================
+# ==============================================================================
+# 13. MAIN EXECUTION
+# ==============================================================================
 
 if __name__ == "__main__":
     init_db()
     log.info("Bot started. Admins: %s", ADMIN_IDS)
+    log.info("Using Model: %s", OPENAI_MODEL)
+    
     try:
         bot.remove_webhook()
         bot.infinity_polling(skip_pending=True, timeout=20)
-    except Exception:
-        log.exception("Polling crashed")
+    except Exception as e:
+        log.exception("Polling crashed: %s", e)
