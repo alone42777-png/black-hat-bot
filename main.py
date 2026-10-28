@@ -22,6 +22,7 @@ import aiohttp
 import psutil
 import zipfile
 from datetime import datetime, timedelta
+from PIL import Image
 
 import telebot
 from telebot import types
@@ -40,7 +41,7 @@ LOG_FILE = "bot.log"
 AI_API_KEY = "AQ.Ab8RN6JwiCH_nK4jO18J2hjW267xM0uMs0TPRWnuZ1z0vmKV4A"
 FORCE_CHANNEL = "@Nova_Kurd_Mod"
 
-# تۆکنی Netlify لێرە داینرا
+# تۆکنی Netlify
 NETLIFY_TOKEN = "nfp_kWjm8385XLJD5GteCuRAuSGcUS6R9Y95e8f6"
 
 # دۆخەکان
@@ -203,7 +204,7 @@ def parse_ban_time(time_str):
 
 
 # ==========================================
-# 4. مێشکی زیرەک (Text & Vision AI)
+# 4. مێشکی زیرەک (Text & Serious Vision AI)
 # ==========================================
 def get_ai_response(user_id, query):
     ql = query.lower().strip()
@@ -230,7 +231,7 @@ def get_ai_response(user_id, query):
         contents = [{"role": r, "parts": [{"text": c}]} for r, c in history]
         contents.append({"role": "user", "parts": [{"text": query}]})
         
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={AI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={AI_API_KEY}"
         
         system_prompt = (
             "You are a helpful, friendly, and highly intelligent AI assistant. "
@@ -271,12 +272,22 @@ def get_ai_response(user_id, query):
         return "ببورە تێنەگشتم بە ڕوونتر بیڵێ"
 
 def get_vision_response(user_id, image_path, user_prompt):
+    """
+    سیستەمی بینینی سیریۆس (Serious Mode) - وێنەکە پاک دەکاتەوە و بە خێراترین مۆدێل شیکاری دەکات.
+    """
     if not AI_API_KEY: return "❌ کلیل نییە."
     try:
-        with open(image_path, "rb") as f:
+        # 🟢 1. پاککردنەوەی وێنەکە بە Pillow بۆ ئەوەی هیچ کێشەیەکی فۆرمات نەبێت
+        img = Image.open(image_path)
+        img = img.convert('RGB') # گۆڕین بۆ RGB بۆ ئەوەی شەفافیەت (Transparency) کێشە دروست نەکات
+        fixed_path = "fixed_image.jpg"
+        img.save(fixed_path, 'JPEG')
+        
+        with open(fixed_path, "rb") as f:
             enc = base64.b64encode(f.read()).decode('utf-8')
             
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={AI_API_KEY}"
+        # 🟢 2. بەکارهێنانی مۆدێلی Flash کە زۆر باشترە بۆ وێنە
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={AI_API_KEY}"
         
         prompt = (
             "You are an elite frontend developer. Analyze this UI image and generate the complete, responsive HTML and CSS code to replicate it exactly. "
@@ -289,24 +300,33 @@ def get_vision_response(user_id, image_path, user_prompt):
             "contents": [{"parts": [{"text": prompt}, {"inline_data": {"mime_type": "image/jpeg", "data": enc}}]}]
         }
         
-        res = requests.post(url, json=payload, timeout=45).json()
+        res = requests.post(url, json=payload, timeout=60).json()
         
-        if 'candidates' in res and len(res['candidates']) > 0:
-            ai_text = res['candidates'][0]['content']['parts'][0]['text']
+        # پاککردنەوەی فایلی کاتی
+        if os.path.exists(fixed_path): os.remove(fixed_path)
+        
+        if 'candidates' not in res:
+            logger.error(f"Gemini Vision Error: {res}")
+            return f"❌ سیستەمی بینین نەیتوانی وێنەکە بخوێنێتەوە. (هەڵە لە API یان کلیلەکە)"
             
-            match = re.search(r'```html(.*?)```', ai_text, re.DOTALL)
-            if match:
-                html_code = match.group(1).strip()
-                c = db()
-                c.execute("INSERT OR REPLACE INTO saved_websites(user_id, html_code) VALUES(?,?)", (user_id, html_code))
-                c.commit()
-                c.close()
-                return f"✅ کۆدی وێبسایتەکە بە سەرکەوتوویی دروستکرا:\n\n<pre><code class='language-html'>{html.escape(html_code)}</code></pre>\n\n💡 <b>ئەگەر دەتەوێت ڕاستەوخۆ دروستی بکەیت و لینک وەربگریت، ئەم فەرمانە بنووسە:</b>\n<code>/create web</code>"
-            return ai_text
-        return "❌ نەتوانرا وێنەکە بخوێنرێتەوە."
+        ai_text = res['candidates'][0]['content']['parts'][0]['text']
+        
+        match = re.search(r'```html(.*?)```', ai_text, re.DOTALL)
+        if match:
+            html_code = match.group(1).strip()
+        else:
+            html_code = ai_text.strip() # Fallback ئەگەر AI مۆدێلی مارکداونی بەکارنەهێنا
+            
+        c = db()
+        c.execute("INSERT OR REPLACE INTO saved_websites(user_id, html_code) VALUES(?,?)", (user_id, html_code))
+        c.commit()
+        c.close()
+        
+        return f"✅ کۆدی وێبسایتەکە بە سەرکەوتوویی دروستکرا:\n\n<pre><code class='language-html'>{html.escape(html_code)}</code></pre>\n\n💡 <b>ئەگەر دەتەوێت ڕاستەوخۆ دروستی بکەیت و لینک وەربگریت، ئەم فەرمانە بنووسە:</b>\n<code>/create web</code>"
+        
     except Exception as e:
-        logger.error(f"Vision Error: {e}")
-        return "❌ کێشەیەک لە سیستەمی بینین ڕوویدا."
+        logger.error(f"Vision Error Exception: {e}")
+        return f"❌ کێشەیەک لە سیستەمی بینین ڕوویدا: {str(e)}"
 
 def deploy_to_netlify(html_content):
     if not NETLIFY_TOKEN:
@@ -363,7 +383,7 @@ def handle_check_sub(call):
         bot.answer_callback_query(call.id, "✅ سوپاس بۆ جۆینبوون!")
         try: bot.delete_message(call.message.chat.id, call.message.message_id)
         except: pass
-        bot.send_message(call.message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v112</b> 💀\n\nسیستەمەکە ئامادەیە.", reply_markup=get_main_keyboard())
+        bot.send_message(call.message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v114</b> 💀\n\nسیستەمەکە ئامادەیە.", reply_markup=get_main_keyboard())
     else:
         bot.answer_callback_query(call.id, "❌ هێشتا جۆین نەبوویتە.", show_alert=True)
 
@@ -446,7 +466,7 @@ def cmd_help2(message):
 def cmd_start(message):
     if not is_subscribed(message.from_user.id): return force_sub_msg(message.chat.id)
     log_user(message)
-    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v112</b> 💀\n\nسیستەمەکە ئامادەیە.", reply_markup=get_main_keyboard())
+    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v114</b> 💀\n\nسیستەمەکە ئامادەیە.", reply_markup=get_main_keyboard())
 
 
 # --- [1] بەڕێوەبردنی بەکارهێنەر ---
@@ -871,19 +891,22 @@ def handle_photo(message):
     bot.send_chat_action(message.chat.id, 'typing')
     msg = bot.reply_to(message, "👁 <b>سیستەمی بینین وێنەکە دەخوێنێتەوە و کۆدەکە دەنووسێت...</b>")
     
-    file_info = bot.get_file(message.photo[-1].file_id)
-    downloaded = bot.download_file(file_info.file_path)
-    
-    with open("temp.jpg", 'wb') as new_file: new_file.write(downloaded)
-    
-    ai_res = get_vision_response(uid, "temp.jpg", message.caption or "")
-    
-    try: 
-        bot.edit_message_text(ai_res, chat_id=message.chat.id, message_id=msg.message_id, parse_mode="HTML")
-    except: 
-        bot.send_message(message.chat.id, ai_res, parse_mode="HTML")
+    try:
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded = bot.download_file(file_info.file_path)
         
-    if os.path.exists("temp.jpg"): os.remove("temp.jpg")
+        with open("temp.jpg", 'wb') as new_file: new_file.write(downloaded)
+        
+        ai_res = get_vision_response(uid, "temp.jpg", message.caption or "")
+        
+        try: 
+            bot.edit_message_text(ai_res, chat_id=message.chat.id, message_id=msg.message_id, parse_mode="HTML")
+        except: 
+            bot.send_message(message.chat.id, ai_res, parse_mode="HTML")
+            
+        if os.path.exists("temp.jpg"): os.remove("temp.jpg")
+    except Exception as e:
+        bot.edit_message_text(f"❌ کێشە لە داگرتنی وێنەکە: {e}", chat_id=message.chat.id, message_id=msg.message_id)
 
 
 # ==========================================
