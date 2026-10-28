@@ -1,25 +1,33 @@
 name: Run Black Hat Bot
-on:
-  schedule:
-    - cron: "0 */6 * * *"
-  workflow_dispatch:
 
-concurrency:
-  group: telegram-bot
-  cancel-in-progress: false
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */5 * * *'
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 355 
+    timeout-minutes: 355
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Install Dependencies
+          python-version: '3.10'
+
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Run Bot
+          pip install pyTelegramBotAPI openai python-dotenv
+
+      - name: Run bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python main.py
