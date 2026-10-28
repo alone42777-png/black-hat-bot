@@ -9,7 +9,7 @@ logger = logging.getLogger("Core")
 
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 
-# ئامادەکردنی سیستەم و بانگکردنی هەموو بەشەکان
+# بانگکردنی هەموو بەشەکان
 init_db()
 user.register(bot)
 admin.register(bot)
