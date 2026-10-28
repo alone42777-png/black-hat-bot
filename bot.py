@@ -9,18 +9,25 @@ import urllib.parse
 import urllib.request
 import re
 import requests
+import time
+import base64
+import hashlib
+import string
+import socket
+import io
+import qrcode
 from datetime import datetime, timedelta
 
 import telebot
 from telebot import types
+from telebot.apihelper import ApiTelegramException
 
 # ==========================================
 TOKEN = "8613090176:AAFK1kyiIBhGp7CP5PE_4xahT-gW1gTsx5M"
 ADMIN_ID = 5527152252
 DB_PATH = "bot_database.db"
-
-# کلیلە نوێیەکە لێرە داینرا (Google Gemini)
 AI_API_KEY = "AQ.Ab8RN6JwiCH_nK4jO18J2hjW267xM0uMs0TPRWnuZ1z0vmKV4A"
+FORCE_CHANNEL = "@Nova_Kurd_Mod"  # کەناڵی ناچاری
 # ==========================================
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
@@ -51,7 +58,10 @@ def init_db():
             acc_created TEXT,
             joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             is_banned INTEGER DEFAULT 0,
-            ban_until DATETIME DEFAULT NULL
+            ban_until DATETIME DEFAULT NULL,
+            refer_code TEXT,
+            referred_by INTEGER,
+            last_daily DATETIME DEFAULT NULL
         );
         CREATE TABLE IF NOT EXISTS user_states (user_id INTEGER PRIMARY KEY, state TEXT, data TEXT);
         CREATE TABLE IF NOT EXISTS user_memory (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, message TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
@@ -59,9 +69,26 @@ def init_db():
         CREATE TABLE IF NOT EXISTS gift_codes (code TEXT PRIMARY KEY, reward INTEGER DEFAULT 10, used_by INTEGER, used_at DATETIME);
         CREATE TABLE IF NOT EXISTS credit (user_id INTEGER PRIMARY KEY, questions_left INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, task TEXT, status INTEGER DEFAULT 0);
     """)
+    # زیادکردنی ستوونەکان ئەگەر پێشتر دروستکرابێت
+    try: c.execute("ALTER TABLE users ADD COLUMN last_daily DATETIME DEFAULT NULL")
+    except: pass
+    try: c.execute("ALTER TABLE users ADD COLUMN refer_code TEXT")
+    except: pass
+    try: c.execute("ALTER TABLE users ADD COLUMN referred_by INTEGER")
+    except: pass
+    
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('bot_status', 'on')")
     c.commit()
+
+def get_setting(key):
+    row = db().execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return row[0] if row else None
+
+def set_setting(key, val):
+    db().execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, val))
+    db().commit()
 
 def log_user(message):
     uid = message.from_user.id
@@ -76,9 +103,9 @@ def log_user(message):
         pass
         
     db().execute("""
-        INSERT OR IGNORE INTO users (user_id, first_name, username, phone, acc_created) 
-        VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
-    """, (uid, fn, un, phone))
+        INSERT OR IGNORE INTO users (user_id, first_name, username, phone, acc_created, refer_code) 
+        VALUES (?, ?, ?, ?, datetime('now', 'localtime'), ?)
+    """, (uid, fn, un, phone, f"ref_{uid}"))
     
     db().execute("""
         UPDATE users SET first_name=?, username=?, phone=? WHERE user_id=?
@@ -86,12 +113,10 @@ def log_user(message):
     db().commit()
 
 def get_bot_status():
-    row = db().execute("SELECT value FROM settings WHERE key='bot_status'").fetchone()
-    return row[0] if row else "on"
+    return get_setting('bot_status') or "on"
 
 def set_bot_status(status):
-    db().execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('bot_status', ?)", (status,))
-    db().commit()
+    set_setting('bot_status', status)
 
 def check_ban(uid):
     row = db().execute("SELECT is_banned, ban_until FROM users WHERE user_id=?", (uid,)).fetchone()
@@ -117,28 +142,21 @@ def check_ban(uid):
 
 def parse_ban_time(time_str):
     time_str = time_str.lower().strip()
-    if time_str == "0":
-        return None
+    if time_str == "0": return None
     match = re.match(r'^(\d+)([mhdw]|mo)$', time_str)
-    if not match:
-        return False
+    if not match: return False
     val = int(match.group(1))
     unit = match.group(2)
     now = datetime.now()
-    if unit == 'm':
-        return (now + timedelta(minutes=val)).strftime("%Y-%m-%d %H:%M:%S")
-    elif unit == 'h':
-        return (now + timedelta(hours=val)).strftime("%Y-%m-%d %H:%M:%S")
-    elif unit == 'd':
-        return (now + timedelta(days=val)).strftime("%Y-%m-%d %H:%M:%S")
-    elif unit == 'w':
-        return (now + timedelta(weeks=val)).strftime("%Y-%m-%d %H:%M:%S")
-    elif unit == 'mo':
-        return (now + timedelta(days=val*30)).strftime("%Y-%m-%d %H:%M:%S")
+    if unit == 'm': return (now + timedelta(minutes=val)).strftime("%Y-%m-%d %H:%M:%S")
+    elif unit == 'h': return (now + timedelta(hours=val)).strftime("%Y-%m-%d %H:%M:%S")
+    elif unit == 'd': return (now + timedelta(days=val)).strftime("%Y-%m-%d %H:%M:%S")
+    elif unit == 'w': return (now + timedelta(weeks=val)).strftime("%Y-%m-%d %H:%M:%S")
+    elif unit == 'mo': return (now + timedelta(days=val*30)).strftime("%Y-%m-%d %H:%M:%S")
     return False
 
 # ==========================================
-# 2. فەنکشنەکانی داتابەیس
+# 2. فەنکشنەکانی داتابەیس و کرێدیت
 # ==========================================
 def set_state(user_id, state, data=""):
     db().execute("INSERT OR REPLACE INTO user_states(user_id, state, data) VALUES(?,?,?)", (user_id, state, data))
@@ -188,7 +206,47 @@ def redeem_gift(user_id, code):
     return True, "ok", row[1]
 
 # ==========================================
-# 3. مێشکی زیرەک (AI Core - Gemini)
+# 3. سیستەمی ناچاری جۆینبوون (Force Sub)
+# ==========================================
+def is_subscribed(user_id):
+    """پشکنین ئەگەر بەکارهێنەر ئەندامی کەناڵەکەیە"""
+    try:
+        member = bot.get_chat_member(FORCE_CHANNEL, user_id)
+        if member.status in ['creator', 'administrator', 'member']:
+            return True
+    except ApiTelegramException as e:
+        # ئەگەر بەکارهێنەر بە تەواوی نەدۆزرایەوە (هەرگیز جۆین نەبووە)
+        logger.warning(f"Subscription check failed for {user_id}: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error checking subscription: {e}")
+        return False
+    return False
+
+def force_sub_msg(chat_id):
+    """ناردنی نامەی ناچارکردن بە جۆینبوون"""
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("📢 جۆینبوون بە کەناڵ", url=f"https://t.me/{FORCE_CHANNEL.replace('@', '')}"))
+    markup.add(types.InlineKeyboardButton("✅ پشکنین", callback_data="check_sub"))
+    bot.send_message(
+        chat_id, 
+        "⚠️ <b>تکایە سەرەتا جۆین بە کەناڵەکە ببە بۆ ئەوەی بتوانیت بۆتەکە بەکاربهێنیت!</b>\n\n"
+        "دوای جۆینبوون، کلیک لە دوگمەی 'پشکنین' بکە.", 
+        reply_markup=markup
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data == "check_sub")
+def handle_check_sub(call):
+    if is_subscribed(call.from_user.id):
+        bot.answer_callback_query(call.id, "✅ سوپاس بۆ جۆینبوون! ئێستا دەتوانیت بۆتەکە بەکاربهێنیت.")
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        # ناردنی نامەی بەخێربێن
+        bot.send_message(call.message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v71.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، یان لەبارەی تەکنەلۆجیا پرسیار بکە." + get_signature())
+    else:
+        bot.answer_callback_query(call.id, "❌ هێشتا جۆین نەبوویتە. تکایە سەرەتا جۆین ببە.", show_alert=True)
+
+# ==========================================
+# 4. مێشکی زیرەک
 # ==========================================
 def get_signature():
     return (
@@ -198,351 +256,447 @@ def get_signature():
         "👑 <b>پەیوەندی:</b> @malikdlashad3 | @ALONE427"
     )
 
-TOPICS = {"it", "cyber", "security", "hack", "هاک", "سایبەر", "network", "تۆڕ", "linux", "windows", "python", "script", "kali", "nmap", "sqlmap", "html", "css", "js", "php", "sql", "java", "c++", "c#", "web", "وێب", "سایت", "code", "کۆد", "ddos", "wifi", "وایفای", "exploit", "payload", "پەیلوود", "vulnerability", "لاوازی", "malware", "database", "encryption", "پاسوۆرد", "bug", "باگ"}
-
-def is_allowed(q):
-    return any(k in q.lower() for k in TOPICS)
-
-LANG_MAP = {"html": "HTML", "css": "CSS", "js": "JS", "javascript": "JavaScript", "php": "PHP", "python": "Python", "react": "React"}
-
-def _web_template(lang):
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Design — {lang}</title>
-  <style>
-    *{{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Tahoma,sans-serif}}
-    body{{background:#0d1117;color:#c9d1d9;display:flex;justify-content:center;align-items:center;min-height:100vh}}
-    .box{{background:#161b22;width:min(450px,92vw);padding:40px;border-radius:12px;border:1px solid #30363d;box-shadow:0 8px 30px rgba(0,0,0,.8)}}
-    .btn{{background:#238636;color:#fff;border:0;padding:12px 24px;border-radius:6px;font-weight:700;cursor:pointer;width:100%}}
-    .btn:hover{{background:#2ea043}}
-  </style>
-</head>
-<body>
-  <div class="box">
-    <h2 style="margin-bottom:16px">Design — {lang}</h2>
-    <button class="btn">Choose file</button>
-  </div>
-</body>
-</html>"""
-
-def _search_snippets(query, timeout=8):
-    try:
-        url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(query)
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            html_resp = resp.read().decode("utf-8", "ignore")
-        snips = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', html_resp, re.DOTALL)
-        return [re.sub(r"<.*?>", "", s).strip() for s in snips[:3] if s.strip()]
-    except Exception as e:
-        logger.warning("Search failed: %s", e)
-        return []
-
-def make_professional_response(query, snippets):
-    intro = random.choice([
-        "بەخێربێیت بۆ سیستەمی شیکاری ئاسایش.",
-        "داواکارییەکەت وەرگیرا. لە خوارەوە شیکاری تەکنیکی هاتووە:",
-        "سیستەمی زیرەک داواکارییەکەی پشکنی و ئەم ئەنجامەی دۆزییەوە:",
-        "وردبینی تەکنیکی تەواو بوو. ئەم زانیارییانە لەبارەی پرسیارەکەتەوە هاتووە:"
-    ])
-    body = "\n\n".join([f"• {s}" for s in snippets]) if snippets else (
-        f"لە ڕوانگەی ئاسایش و پڕۆگرامسازییەوە، بابەتی (<b>{html.escape(query)}</b>) "
-        f"پەیوەندی بە بواری تەکنەلۆجیا هەیە. بۆ زانیاری زیاتر و وردبینی، "
-        f"پێویستە پرسیارەکەت بە وردی زیاتر ڕوون بکەیتەوە یان کۆدی پەیوەندیدار بنێریت."
-    )
-    return f"🛡 <b>شیکاری ئاسایش و پڕۆگرامسازی:</b>\n\n<i>{intro}</i>\n\n{body}"
-
 def get_prime_ai_response(query):
-    if not AI_API_KEY or len(AI_API_KEY) < 10:
-        snippets = _search_snippets(query)
-        return make_professional_response(query, snippets)
-
+    if not AI_API_KEY: return "❌ کلیل نییە."
     try:
-        # بەکارهێنانی API ی Gemini
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={AI_API_KEY}"
-        headers = {"Content-Type": "application/json"}
-        
-        prompt = f"You are BLACK HAT AI PRIME, an expert in cybersecurity, hacking, and programming. Answer professionally in Kurdish Sorani. Be direct, technical, and helpful. Do not use markdown code blocks unless necessary. User asks: {query}"
-        
-        payload = {
-            "contents": [{
-                "parts": [{"text": prompt}]
-            }]
-        }
-        
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        prompt = (
+            "You are BLACK HAT AI PRIME, an expert in technology, hacking, and programming. "
+            "Answer in Kurdish Sorani, keep technical terms in English. Be precise and detailed. "
+            f"User Question: {query}"
+        )
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        response = requests.post(url, json=payload, timeout=30)
         data = response.json()
-        
         if 'candidates' in data and len(data['candidates']) > 0:
             return data['candidates'][0]['content']['parts'][0]['text']
-        else:
-            logger.error(f"AI API Error: {data}")
-            snippets = _search_snippets(query)
-            return make_professional_response(query, snippets)
-            
+        return "❌ سیستەمی زیرەک نەیتوانی وەڵام بداتەوە."
     except Exception as e:
-        logger.error(f"AI Connection Error: {e}")
-        snippets = _search_snippets(query)
-        return make_professional_response(query, snippets)
+        logger.error(f"AI Error: {e}")
+        return "❌ کێشەیەک لە مێشکی سیستەم ڕوویدا."
+
+def get_vision_ai_response(image_path, user_prompt):
+    if not AI_API_KEY: return "❌ کلیل نییە."
+    try:
+        with open(image_path, "rb") as f:
+            enc = base64.b64encode(f.read()).decode('utf-8')
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key={AI_API_KEY}"
+        prompt = "You are an elite frontend developer. Write the complete HTML/CSS code for this UI image. " + user_prompt
+        payload = {"contents": [{"parts": [{"text": prompt}, {"inline_data": {"mime_type": "image/jpeg", "data": enc}}]}]}
+        response = requests.post(url, json=payload, timeout=45)
+        data = response.json()
+        if 'candidates' in data and len(data['candidates']) > 0:
+            return data['candidates'][0]['content']['parts'][0]['text']
+        return "❌ نەتوانرا وێنەکە بخوێنرێتەوە."
+    except Exception as e:
+        logger.error(f"Vision Error: {e}")
+        return "❌ کێشەیەک لە سیستەمی بینین ڕوویدا."
 
 # ==========================================
-# 4. پەنێلی ئەدمین
+# 5. ئامێرەکان (Features)
+# ==========================================
+@bot.message_handler(commands=["qr"])
+def cmd_qr(message):
+    text = message.text.replace("/qr", "").strip()
+    if not text: return bot.reply_to(message, "⚠️ نموونە: <code>/qr https://google.com</code>")
+    img = qrcode.make(text)
+    bio = io.BytesIO()
+    bio.name = 'qr.png'
+    img.save(bio, 'PNG')
+    bio.seek(0)
+    bot.send_photo(message.chat.id, bio, caption="✅ QR Code ئامادەیە.")
+
+@bot.message_handler(commands=["pass"])
+def cmd_pass(message):
+    length = 16
+    parts = message.text.split()
+    if len(parts) > 1 and parts[1].isdigit(): length = min(int(parts[1]), 64)
+    chars = string.ascii_letters + string.digits + "!@#$%^&*"
+    pwd = "".join(random.choice(chars) for _ in range(length))
+    bot.reply_to(message, f"🔐 <b>پاسوۆردی بەهێز:</b>\n<code>{pwd}</code>")
+
+@bot.message_handler(commands=["hash"])
+def cmd_hash(message):
+    text = message.text.replace("/hash", "").strip()
+    if not text: return
+    md5 = hashlib.md5(text.encode()).hexdigest()
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    bot.reply_to(message, f"🔑 <b>MD5:</b>\n<code>{md5}</code>\n\n🔑 <b>SHA256:</b>\n<code>{sha}</code>")
+
+@bot.message_handler(commands=["encode"])
+def cmd_encode(message):
+    text = message.text.replace("/encode", "").strip()
+    if not text: return
+    bot.reply_to(message, f"📦 <b>Base64:</b>\n<code>{base64.b64encode(text.encode()).decode()}</code>")
+
+@bot.message_handler(commands=["decode"])
+def cmd_decode(message):
+    text = message.text.replace("/decode", "").strip()
+    if not text: return
+    try:
+        dec = base64.b64decode(text.encode()).decode()
+        bot.reply_to(message, f"📦 <b>Decoded:</b>\n<code>{dec}</code>")
+    except: bot.reply_to(message, "❌ کۆدەکە هەڵەیە.")
+
+@bot.message_handler(commands=["calc"])
+def cmd_calc(message):
+    expr = message.text.replace("/calc", "").strip()
+    if not expr: return
+    try:
+        result = eval(expr, {"__builtins__": None}, {})
+        bot.reply_to(message, f"🧮 <b>ئەنجام:</b> <code>{result}</code>")
+    except: bot.reply_to(message, "❌ بیرکارییەکە هەڵەیە.")
+
+@bot.message_handler(commands=["weather"])
+def cmd_weather(message):
+    city = message.text.replace("/weather", "").strip()
+    if not city: return
+    try:
+        res = requests.get(f"https://wttr.in/{city}?format=3", timeout=10)
+        bot.reply_to(message, f"🌤 <b>کەشوهەوا:</b>\n<code>{res.text}</code>")
+    except: bot.reply_to(message, "❌ نەتوانرا کەشوهەوا بدۆزرێتەوە.")
+
+@bot.message_handler(commands=["short"])
+def cmd_short(message):
+    url = message.text.replace("/short", "").strip()
+    if not url: return
+    try:
+        res = requests.get(f"http://tinyurl.com/api-create.php?url={url}", timeout=10)
+        bot.reply_to(message, f"🔗 <b>لینکی کورت:</b>\n{res.text}")
+    except: bot.reply_to(message, "❌ هەڵە.")
+
+@bot.message_handler(commands=["dns"])
+def cmd_dns(message):
+    domain = message.text.replace("/dns", "").strip()
+    if not domain: return
+    try:
+        ip = socket.gethostbyname(domain)
+        bot.reply_to(message, f"🌐 <b>DNS Lookup:</b>\n<code>{domain}</code> → <code>{ip}</code>")
+    except: bot.reply_to(message, "❌ نەتوانرا ئایپییەکە بدۆزرێتەوە.")
+
+@bot.message_handler(commands=["whois"])
+def cmd_whois(message):
+    domain = message.text.replace("/whois", "").strip()
+    if not domain: return
+    try:
+        res = requests.get(f"https://rdap.org/domain/{domain}", timeout=10)
+        if res.status_code == 200:
+            data = res.json()
+            reg_date = next((ev.get('eventDate') for ev in data.get('events', []) if ev.get('eventAction') == 'registration'), 'نەزانراو')
+            bot.reply_to(message, f"🌐 <b>WHOIS:</b> {domain}\n📅 <b>تۆمارکردن:</b> {reg_date}")
+        else: bot.reply_to(message, "❌ نەدۆزرایەوە.")
+    except: bot.reply_to(message, "❌ هەڵە.")
+
+@bot.message_handler(commands=["ip"])
+def cmd_ip(message):
+    ip = message.text.replace("/ip", "").strip()
+    if not ip: return
+    try:
+        res = requests.get(f"http://ip-api.com/json/{ip}?fields=status,country,city,isp,query", timeout=10).json()
+        if res['status'] == 'success':
+            bot.reply_to(message, f"🌍 <b>IP:</b> {res['query']}\n🏳️ <b>وڵات:</b> {res['country']}\n🏙 <b>شار:</b> {res['city']}\n🏢 <b>ISP:</b> {res['isp']}")
+        else: bot.reply_to(message, "❌ هەڵە.")
+    except: bot.reply_to(message, "❌ هەڵە.")
+
+@bot.message_handler(commands=["meme"])
+def cmd_meme(message):
+    try:
+        res = requests.get("https://meme-api.com/gimme/ProgrammerHumor", timeout=10).json()
+        bot.send_photo(message.chat.id, res['url'], caption=f"😂 {res['title']}")
+    except: bot.reply_to(message, "❌ هەڵە.")
+
+@bot.message_handler(commands=["quote"])
+def cmd_quote(message):
+    try:
+        res = requests.get("https://zenquotes.io/api/random", timeout=10).json()
+        bot.reply_to(message, f"💡 <i>\"{res[0]['q']}\"</i>\n\n— <b>{res[0]['a']}</b>")
+    except: bot.reply_to(message, "❌ هەڵە.")
+
+@bot.message_handler(commands=["tr"])
+def cmd_tr(message):
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 3: return bot.reply_to(message, "⚠️ نموونە: <code>/tr en سڵاو</code>")
+    lang, text = parts[1], parts[2]
+    try:
+        res = requests.get(f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={lang}&dt=t&q={urllib.parse.quote(text)}", timeout=10).json()
+        bot.reply_to(message, f"🌐 <b>وەرگێڕان:</b>\n{res[0][0][0]}")
+    except: bot.reply_to(message, "❌ هەڵە.")
+
+@bot.message_handler(commands=["ud"])
+def cmd_ud(message):
+    term = message.text.replace("/ud", "").strip()
+    if not term: return
+    try:
+        res = requests.get(f"http://api.urbandictionary.com/v0/define?term={urllib.parse.quote(term)}", timeout=10).json()
+        if res['list']:
+            d = res['list'][0]['definition'].replace('[', '').replace(']', '')
+            bot.reply_to(message, f"📖 <b>{term}:</b>\n\n{d[:1000]}...")
+        else: bot.reply_to(message, "❌ نەدۆزرایەوە.")
+    except: bot.reply_to(message, "❌ هەڵە.")
+
+@bot.message_handler(commands=["todo"])
+def cmd_todo(message):
+    parts = message.text.split(maxsplit=2)
+    uid = message.from_user.id
+    if len(parts) < 2:
+        rows = db().execute("SELECT id, task, status FROM todos WHERE user_id=?", (uid,)).fetchall()
+        if not rows: return bot.reply_to(message, "📝 لیستەکەت بەتاڵە.")
+        txt = "📝 <b>لیستی کارەکانت:</b>\n\n"
+        for r in rows: txt += f"{'✅' if r[2] else '⏳'} <code>{r[0]}</code>. {r[1]}\n"
+        return bot.reply_to(message, txt + "\n<i>بۆ سڕینەوە: /todo del ID</i>")
+    action = parts[1].lower()
+    if action == "add" and len(parts) == 3:
+        db().execute("INSERT INTO todos(user_id, task) VALUES(?,?)", (uid, parts[2]))
+        db().commit()
+        bot.reply_to(message, "✅ زیادکرا.")
+    elif action == "del" and len(parts) == 3:
+        db().execute("DELETE FROM todos WHERE id=? AND user_id=?", (parts[2], uid))
+        db().commit()
+        bot.reply_to(message, "🗑 سڕایەوە.")
+
+@bot.message_handler(commands=["remind"])
+def cmd_remind(message):
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 3: return bot.reply_to(message, "⚠️ نموونە: <code>/remind 10m کۆفی</code>")
+    time_str, text = parts[1], parts[2]
+    val = int(re.findall(r'\d+', time_str)[0]) if re.findall(r'\d+', time_str) else 0
+    unit = time_str[-1]
+    seconds = val * 60 if unit == 'm' else val * 3600 if unit == 'h' else val
+    uid = message.from_user.id
+    bot.reply_to(message, f"⏰ باشە، دوای {time_str} بیرت دەخەمەوە.")
+    def remind():
+        time.sleep(seconds)
+        bot.send_message(uid, f"🔔 <b>بیرخستنەوە:</b>\n{text}")
+    threading.Thread(target=remind, daemon=True).start()
+
+@bot.message_handler(commands=["referral"])
+def cmd_referral(message):
+    uid = message.from_user.id
+    row = db().execute("SELECT refer_code FROM users WHERE user_id=?", (uid,)).fetchone()
+    code = row[0] if row else f"ref_{uid}"
+    link = f"https://t.me/{bot.get_me().username}?start={code}"
+    bot.reply_to(message, f"👥 <b>سیستەمی بانگهێشتکردن:</b>\n\n🔗 لینکی تۆ:\n<code>{link}</code>\n\n<i>بۆ هەر هاوڕێیەک کە بانگهێشت بکەیت، 5 کرێدیت وەردەگریت.</i>")
+
+@bot.message_handler(commands=["daily"])
+def cmd_daily(message):
+    uid = message.from_user.id
+    row = db().execute("SELECT last_daily FROM users WHERE user_id=?", (uid,)).fetchone()
+    now = datetime.now()
+    if row and row[0]:
+        last = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
+        if (now - last).total_seconds() < 86400:
+            rem = 86400 - int((now - last).total_seconds())
+            return bot.reply_to(message, f"⏳ چاوەڕوان بە. {rem // 3600} کاتژمێر و {(rem % 3600) // 60} خولەک ماوە.")
+    add_credit(uid, 1)
+    db().execute("UPDATE users SET last_daily=datetime('now', 'localtime') WHERE user_id=?", (uid,))
+    db().commit()
+    bot.reply_to(message, "🎁 <b>پیرۆزە!</b> 1 کرێدیتی ڕۆژانە زیادکرا." + get_signature())
+
+@bot.message_handler(commands=["profile"])
+def cmd_profile(message):
+    uid = message.from_user.id
+    u = db().execute("SELECT first_name, joined_at FROM users WHERE user_id=?", (uid,)).fetchone()
+    c = db().execute("SELECT questions_left FROM credit WHERE user_id=?", (uid,)).fetchone()
+    m = db().execute("SELECT COUNT(*) FROM user_memory WHERE user_id=?", (uid,)).fetchone()[0]
+    bot.reply_to(message, f"👤 <b>پرۆفایل:</b>\n🆔 <code>{uid}</code>\n📅 جۆینبوون: {u[1] if u else '?'}\n💳 کرێدیت: <b>{c[0] if c else 0}</b>\n💬 نامەکان: {m}" + get_signature())
+
+@bot.message_handler(commands=["top"])
+def cmd_top(message):
+    rows = db().execute("SELECT u.first_name, c.questions_left FROM credit c JOIN users u ON c.user_id = u.user_id ORDER BY c.questions_left DESC LIMIT 10").fetchall()
+    txt = "🏆 <b>باشترین 10 بەکارهێنەر:</b>\n\n"
+    for i, r in enumerate(rows, 1): txt += f"{i}. {r[0]} — <b>{r[1]}</b> کرێدیت\n"
+    bot.reply_to(message, txt + get_signature())
+
+@bot.message_handler(commands=["ping"])
+def cmd_ping(message):
+    start = time.time()
+    msg = bot.reply_to(message, "🏓...")
+    bot.edit_message_text(f"🏓 پۆنگ! {round((time.time() - start) * 1000)}ms", chat_id=message.chat.id, message_id=msg.message_id)
+
+@bot.message_handler(commands=["time"])
+def cmd_time(message):
+    bot.reply_to(message, f"⏰ <code>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</code>")
+
+# ==========================================
+# 6. پەنێلی ئەدمین
 # ==========================================
 @bot.message_handler(commands=["panel"])
 def cmd_panel(message):
     if message.from_user.id != ADMIN_ID: return
-    log_user(message)
-    
     total_users = db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
     total_codes = db().execute("SELECT COUNT(*) FROM gift_codes").fetchone()[0]
-    used_codes = db().execute("SELECT COUNT(*) FROM gift_codes WHERE used_by IS NOT NULL").fetchone()[0]
     bot_status = get_bot_status()
-    ai_status = "✅ چالاک (Gemini)" if AI_API_KEY else "❌ ناچالاک"
     
     text = (
-        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v65.0</b> 👑\n\n"
-        f"👤 کۆی بەکارهێنەران: <b>{total_users}</b>\n"
-        f"🎁 کۆدی خەڵات: <b>{total_codes}</b> (بەکارهاتوو: {used_codes})\n"
+        f"👑 <b>پەنێلی سەرۆکایەتی (Admin Panel) — v71.0</b> 👑\n\n"
+        f"👤 بەکارهێنەران: <b>{total_users}</b>\n"
+        f"🎁 کۆدەکان: <b>{total_codes}</b>\n"
         f"⚙️ دۆخی بۆت: <b>{'✅ کارا' if bot_status == 'on' else '❌ ناچالاک'}</b>\n"
-        f"🧠 مێشکی زیرەک: <b>{ai_status}</b>\n\n"
-        f"📌 <b>فەرمانەکان:</b>\n\n"
-        f"🔹 <code>/stats</code> — ئاماری سیستەم\n"
-        f"🔹 <code>/members</code> — لیستی دوایین 50 ئەندام\n"
-        f"🔹 <code>/user [ID]</code> — زانیاری وردی بەکارهێنەر\n"
-        f"🔹 <code>/send [ID] [نامە]</code> — ناردنی نامەی تاکەکەسی\n"
-        f"🔹 <code>/broadcast [نامە]</code> — ناردنی نامە بۆ هەمووان\n"
-        f"🔹 <code>/addcredit [ID] [ژمارە]</code> — زیادکردنی کرێدیت\n"
-        f"🔹 <code>/remcredit [ID] [ژمارە]</code> — کەمکردنەوەی کرێدیت\n"
-        f"🔹 <code>/setcredit [ID] [ژمارە]</code> — دیاریکردنی کرێدیت\n"
-        f"🔹 <code>/ban [ID] [کات]</code> — بلۆککردن (m, h, d, w, mo, 0)\n"
-        f"🔹 <code>/unban [ID]</code> — کردنەوەی بلۆک\n"
-        f"🔹 <code>/on</code> — کاراکردنی بۆت\n"
-        f"🔹 <code>/off</code> — ناچالاککردنی بۆت\n"
-        f"🔹 <code>/gen [ژمارە]</code> — دروستکردنی کۆدی خەڵات\n"
-        f"🔹 <code>/codes</code> — بینینی کۆدە چالاکەکان\n"
-        f"🔹 <code>/delcode [کۆد]</code> — سڕینەوەی کۆدێک\n"
-        f"🔹 <code>/clearcodes</code> — سڕینەوەی هەموو کۆدەکان\n"
-        f"🔹 <code>/backup</code> — داگرتنی فایلی داتابەیس"
+        f"📢 کەناڵی ناچاری: <b>{FORCE_CHANNEL}</b>\n\n"
+        f"📌 <b>فەرمانەکان:</b>\n"
+        f"🔹 <code>/stats</code> | <code>/members</code> | <code>/user [ID]</code>\n"
+        f"🔹 <code>/send [ID] [نامە]</code> | <code>/broadcast [نامە]</code>\n"
+        f"🔹 <code>/addcredit</code> | <code>/remcredit</code> | <code>/setcredit</code>\n"
+        f"🔹 <code>/ban [ID] [کات]</code> | <code>/unban [ID]</code>\n"
+        f"🔹 <code>/on</code> | <code>/off</code> | <code>/gen</code> | <code>/codes</code>\n"
+        f"🔹 <code>/backup</code> | <code>/resetdaily [ID]</code>"
     )
     bot.send_message(message.chat.id, text)
+
+@bot.message_handler(commands=["resetdaily"])
+def cmd_reset_daily(message):
+    if message.from_user.id != ADMIN_ID: return
+    parts = message.text.split()
+    if len(parts) < 2: return
+    db().execute("UPDATE users SET last_daily=NULL WHERE user_id=?", (parts[1],))
+    db().commit()
+    bot.reply_to(message, "✅ ڕیستارت کرا.")
 
 @bot.message_handler(commands=["stats"])
 def cmd_stats(message):
     if message.from_user.id != ADMIN_ID: return
-    users = db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    banned = db().execute("SELECT COUNT(*) FROM users WHERE is_banned=1").fetchone()[0]
-    msgs = db().execute("SELECT COUNT(*) FROM user_memory").fetchone()[0]
-    bot.reply_to(message, f"📊 <b>ئامار:</b>\n\n👤 بەکارهێنەران: {users}\n🚫 بلۆککراوەکان: {banned}\n💬 نامەکان: {msgs}")
+    u = db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    b = db().execute("SELECT COUNT(*) FROM users WHERE is_banned=1").fetchone()[0]
+    m = db().execute("SELECT COUNT(*) FROM user_memory").fetchone()[0]
+    bot.reply_to(message, f"📊 بەکارهێنەران: {u}\n🚫 بلۆککراو: {b}\n💬 نامەکان: {m}")
 
 @bot.message_handler(commands=["members"])
 def cmd_members(message):
     if message.from_user.id != ADMIN_ID: return
-    rows = db().execute("SELECT user_id, first_name, username, is_banned, ban_until FROM users ORDER BY joined_at DESC LIMIT 50").fetchall()
-    if not rows:
-        bot.reply_to(message, "هیچ ئەندامێک نییە.")
-        return
-    text = "👥 <b>دوایین 50 ئەندام:</b>\n\n"
-    for r in rows:
-        uid, fn, un, banned, until = r
-        un_str = f"@{un}" if un != "بێ یوزەرنەیم" else "بێ یوزەرنەیم"
-        status = "✅"
-        if banned:
-            status = f"🚫 (تا: {until})" if until else "🚫 (هەتا هەتای)"
-        text += f"{status} {fn} ({un_str}) - <code>{uid}</code>\n"
-    bot.reply_to(message, text)
+    rows = db().execute("SELECT user_id, first_name, is_banned FROM users ORDER BY joined_at DESC LIMIT 50").fetchall()
+    txt = "👥 <b>50 ئەندامی کۆتایی:</b>\n\n"
+    for r in rows: txt += f"{'🚫' if r[2] else '✅'} {r[1]} - <code>{r[0]}</code>\n"
+    bot.reply_to(message, txt)
 
 @bot.message_handler(commands=["user"])
 def cmd_user_info(message):
     if message.from_user.id != ADMIN_ID: return
     parts = message.text.split()
-    if len(parts) < 2 or not parts[1].isdigit():
-        bot.reply_to(message, "⚠️ تکایە ID بنووسە. نموونە: <code>/user 123456789</code>")
-        return
-        
-    target_id = int(parts[1])
-    row = db().execute("SELECT user_id, first_name, username, phone, acc_created, joined_at, is_banned, ban_until FROM users WHERE user_id=?", (target_id,)).fetchone()
-    
-    if not row:
-        bot.reply_to(message, "❌ بەکارهێنەر نەدۆزرایەوە.")
-        return
-        
-    uid, fn, un, phone, acc_created, joined_at, banned, until = row
-    un_str = f"@{un}" if un != "بێ یوزەرنەیم" else "بێ یوزەرنەیم"
-    status = "✅ ئاسایی"
-    if banned:
-        status = f"🚫 بلۆککراو (تا: {until})" if until else "🚫 بلۆککراو (هەتا هەتای)"
-        
-    text = (
-        f"👤 <b>زانیاری بەکارهێنەر:</b>\n\n"
-        f"🆔 ID: <code>{uid}</code>\n"
-        f"📝 ناو: {fn}\n"
-        f"🔗 یوزەرنەیم: {un_str}\n"
-        f"📞 ژمارە تەلەفۆن: {phone}\n"
-        f"📅 بەرواری دروستکردنی ئەکاونت: {acc_created}\n"
-        f"📥 بەرواری جۆینبوون لە بۆت: {joined_at}\n"
-        f"⚙️ دۆخ: {status}"
-    )
-    bot.reply_to(message, text)
+    if len(parts) < 2: return
+    r = db().execute("SELECT user_id, first_name, username, phone, acc_created, joined_at, is_banned, ban_until FROM users WHERE user_id=?", (parts[1],)).fetchone()
+    if not r: return bot.reply_to(message, "❌ نەدۆزرایەوە.")
+    st = "✅ ئاسایی" if not r[6] else f"🚫 بلۆک (تا: {r[7]})"
+    bot.reply_to(message, f"👤 <b>زانیاری:</b>\n🆔 <code>{r[0]}</code>\n📝 ناو: {r[1]}\n🔗 یوزەر: @{r[2]}\n📞 تەلەفۆن: {r[3]}\n📅 ئەکاونت: {r[4]}\n📥 جۆینبوون: {r[5]}\n⚙️ دۆخ: {st}")
 
 @bot.message_handler(commands=["send"])
 def cmd_send(message):
     if message.from_user.id != ADMIN_ID: return
     parts = message.text.split(maxsplit=2)
-    if len(parts) < 3 or not parts[1].isdigit():
-        bot.reply_to(message, "⚠️ شێواز هەڵەیە. بنووسە:\n<code>/send [ID] [نامە]</code>")
-        return
-    
-    target_id = int(parts[1])
-    msg_text = parts[2]
+    if len(parts) < 3: return
     try:
-        bot.send_message(target_id, msg_text)
-        bot.reply_to(message, f"✅ نامە نێردرا بۆ <code>{target_id}</code>.")
-    except Exception as e:
-        bot.reply_to(message, f"❌ نەتوانرا نامە بنێردرێت. هۆکار: {e}")
+        bot.send_message(int(parts[1]), parts[2])
+        bot.reply_to(message, "✅ نێردرا.")
+    except Exception as e: bot.reply_to(message, f"❌ هەڵە: {e}")
 
 @bot.message_handler(commands=["broadcast"])
 def cmd_broadcast(message):
     if message.from_user.id != ADMIN_ID: return
     parts = message.text.split(maxsplit=1)
-    if len(parts) < 2:
-        bot.reply_to(message, "⚠️ تکایە نامەکە بنووسە. نموونە:\n<code>/broadcast سڵاو بۆ هەمووان</code>")
-        return
-    msg_text = parts[1]
+    if len(parts) < 2: return
     users = db().execute("SELECT user_id FROM users WHERE is_banned=0").fetchall()
-    bot.reply_to(message, "⏳ دەستپێکردنی ناردن...")
-    sent, failed = 0, 0
+    s, f = 0, 0
     for (uid,) in users:
         try:
-            bot.send_message(uid, msg_text)
-            sent += 1
-        except Exception:
-            failed += 1
-    bot.reply_to(message, f"✅ نێردرا بۆ: {sent}\n❌ شکست: {failed}")
+            bot.send_message(uid, parts[1])
+            s += 1
+            time.sleep(0.05)
+        except: f += 1
+    bot.reply_to(message, f"✅ نێردرا: {s} | ❌ شکست: {f}")
 
 @bot.message_handler(commands=["addcredit"])
 def cmd_add_credit(message):
     if message.from_user.id != ADMIN_ID: return
-    parts = message.text.split()
-    if len(parts) < 3 or not parts[1].isdigit() or not parts[2].isdigit():
-        bot.reply_to(message, "⚠️ شێواز هەڵەیە. بنووسە:\n<code>/addcredit [ID] [ژمارە]</code>")
-        return
-    target_id, amount = int(parts[1]), int(parts[2])
-    add_credit(target_id, amount)
-    bot.reply_to(message, f"✅ <b>{amount}</b> کرێدیت زیادکرا بۆ <code>{target_id}</code>.")
+    p = message.text.split()
+    if len(p) < 3: return
+    add_credit(int(p[1]), int(p[2]))
+    bot.reply_to(message, f"✅ {p[2]} کرێدیت زیادکرا.")
 
 @bot.message_handler(commands=["remcredit"])
 def cmd_remove_credit(message):
     if message.from_user.id != ADMIN_ID: return
-    parts = message.text.split()
-    if len(parts) < 3 or not parts[1].isdigit() or not parts[2].isdigit():
-        bot.reply_to(message, "⚠️ شێواز هەڵەیە. بنووسە:\n<code>/remcredit [ID] [ژمارە]</code>")
-        return
-    target_id, amount = int(parts[1]), int(parts[2])
-    remove_credit(target_id, amount)
-    bot.reply_to(message, f"✅ <b>{amount}</b> کرێدیت کەمکرایەوە لە <code>{target_id}</code>.")
+    p = message.text.split()
+    if len(p) < 3: return
+    remove_credit(int(p[1]), int(p[2]))
+    bot.reply_to(message, f"✅ {p[2]} کرێدیت کەمکرایەوە.")
 
 @bot.message_handler(commands=["setcredit"])
 def cmd_set_credit(message):
     if message.from_user.id != ADMIN_ID: return
-    parts = message.text.split()
-    if len(parts) < 3 or not parts[1].isdigit() or not parts[2].isdigit():
-        bot.reply_to(message, "⚠️ شێواز هەڵەیە. بنووسە:\n<code>/setcredit [ID] [ژمارە]</code>")
-        return
-    target_id, amount = int(parts[1]), int(parts[2])
-    set_credit(target_id, amount)
-    bot.reply_to(message, f"✅ کرێدیتی <code>{target_id}</code> کرا بە <b>{amount}</b>.")
+    p = message.text.split()
+    if len(p) < 3: return
+    set_credit(int(p[1]), int(p[2]))
+    bot.reply_to(message, f"✅ کرێدیت کرا بە {p[2]}.")
 
 @bot.message_handler(commands=["ban"])
 def cmd_ban(message):
     if message.from_user.id != ADMIN_ID: return
-    parts = message.text.split()
-    if len(parts) < 2 or not parts[1].isdigit():
-        bot.reply_to(message, "⚠️ تکایە ID و کات بنووسە. نموونە: <code>/ban 123456789 2d</code> (بۆ ۲ ڕۆژ، 0 بۆ هەتا هەتای)")
-        return
-    target_id = int(parts[1])
-    time_str = parts[2] if len(parts) > 2 else "0"
-    
-    if target_id == ADMIN_ID:
-        bot.reply_to(message, "❌ ناتوانیت خۆت بلۆک بکەیت!")
-        return
-        
-    ban_until = parse_ban_time(time_str)
-    if ban_until is False:
-        bot.reply_to(message, "❌ کاتی نادروست. تکایە m، h، d، w، mo یان 0 بەکاربهێنە.")
-        return
-        
-    if ban_until is None:
-        db().execute("UPDATE users SET is_banned=1, ban_until=NULL WHERE user_id=?", (target_id,))
-        bot.reply_to(message, f"🚫 بەکارهێنەر <code>{target_id}</code> بۆ هەتا هەتای بلۆک کرا.")
+    p = message.text.split()
+    if len(p) < 2: return
+    t_id = int(p[1])
+    t_str = p[2] if len(p) > 2 else "0"
+    if t_id == ADMIN_ID: return bot.reply_to(message, "❌ خۆت ناتوانیت بلۆک بکەیت.")
+    b_until = parse_ban_time(t_str)
+    if b_until is False: return bot.reply_to(message, "❌ کات هەڵەیە.")
+    if b_until is None:
+        db().execute("UPDATE users SET is_banned=1, ban_until=NULL WHERE user_id=?", (t_id,))
+        bot.reply_to(message, "🚫 بۆ هەتا هەتای بلۆک کرا.")
     else:
-        db().execute("UPDATE users SET is_banned=1, ban_until=? WHERE user_id=?", (ban_until, target_id))
-        bot.reply_to(message, f"🚫 بەکارهێنەر <code>{target_id}</code> بلۆک کرا.\n⏰ تا: {ban_until}")
+        db().execute("UPDATE users SET is_banned=1, ban_until=? WHERE user_id=?", (b_until, t_id))
+        bot.reply_to(message, f"🚫 تا {b_until} بلۆک کرا.")
     db().commit()
 
 @bot.message_handler(commands=["unban"])
 def cmd_unban(message):
     if message.from_user.id != ADMIN_ID: return
-    parts = message.text.split()
-    if len(parts) < 2 or not parts[1].isdigit():
-        bot.reply_to(message, "⚠️ تکایە ID بنووسە. نموونە: <code>/unban 123456789</code>")
-        return
-    target_id = int(parts[1])
-    db().execute("UPDATE users SET is_banned=0, ban_until=NULL WHERE user_id=?", (target_id,))
+    p = message.text.split()
+    if len(p) < 2: return
+    db().execute("UPDATE users SET is_banned=0, ban_until=NULL WHERE user_id=?", (int(p[1]),))
     db().commit()
-    bot.reply_to(message, f"✅ بەکارهێنەر <code>{target_id}</code> کرایەوە.")
+    bot.reply_to(message, "✅ کرایەوە.")
 
 @bot.message_handler(commands=["on"])
 def cmd_on(message):
     if message.from_user.id != ADMIN_ID: return
     set_bot_status("on")
-    bot.reply_to(message, "✅ سیستەم کارا کرا. بۆت ئێستا بۆ هەمووان کار دەکات.")
+    bot.reply_to(message, "✅ کارا کرا.")
 
 @bot.message_handler(commands=["off"])
 def cmd_off(message):
     if message.from_user.id != ADMIN_ID: return
     set_bot_status("off")
-    bot.reply_to(message, "❌ سیستەم ناچالاک کرا. بۆت ئێستا تەنها بۆ تۆ وەڵام دەداتەوە.")
+    bot.reply_to(message, "❌ ناچالاک کرا.")
 
 @bot.message_handler(commands=["gen"])
 def cmd_gen(message):
     if message.from_user.id != ADMIN_ID: return
-    parts = message.text.split()
-    reward = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 10
-    code = create_gift(reward)
-    bot.reply_to(message, f"✅ کۆدی نوێ دروستکرا:\n<code>{code}</code>\n🎁 Reward: {reward}")
+    p = message.text.split()
+    rew = int(p[1]) if len(p) > 1 and p[1].isdigit() else 10
+    c = create_gift(rew)
+    bot.reply_to(message, f"✅ کۆد: <code>{c}</code>")
 
 @bot.message_handler(commands=["codes"])
 def cmd_codes(message):
     if message.from_user.id != ADMIN_ID: return
     rows = db().execute("SELECT code, reward FROM gift_codes WHERE used_by IS NULL ORDER BY rowid DESC LIMIT 10").fetchall()
-    if not rows:
-        bot.reply_to(message, "هیچ کۆدێکی چالاک نییە.")
-        return
-    
-    text = "🎁 <b>دوایین 10 کۆدی چالاک:</b>\n\n"
-    for r in rows:
-        text += f"🔹 <code>{r[0]}</code> (پرسیار: {r[1]})\n"
-    bot.reply_to(message, text)
+    txt = "🎁 <b>کۆدە چالاکەکان:</b>\n\n"
+    for r in rows: txt += f"🔹 <code>{r[0]}</code> (پرسیار: {r[1]})\n"
+    bot.reply_to(message, txt)
 
 @bot.message_handler(commands=["delcode"])
 def cmd_del_code(message):
     if message.from_user.id != ADMIN_ID: return
-    parts = message.text.split()
-    if len(parts) < 2:
-        bot.reply_to(message, "⚠️ تکایە کۆدەکە بنووسە. نموونە:\n<code>/delcode BUGFIX-1234-X100</code>")
-        return
-    code = parts[1]
-    db().execute("DELETE FROM gift_codes WHERE code=?", (code,))
+    p = message.text.split()
+    if len(p) < 2: return
+    db().execute("DELETE FROM gift_codes WHERE code=?", (p[1],))
     db().commit()
-    bot.reply_to(message, f"✅ کۆدی <code>{code}</code> سڕایەوە.")
+    bot.reply_to(message, "✅ سڕایەوە.")
 
 @bot.message_handler(commands=["clearcodes"])
 def cmd_clear_codes(message):
     if message.from_user.id != ADMIN_ID: return
     db().execute("DELETE FROM gift_codes WHERE used_by IS NULL")
     db().commit()
-    bot.reply_to(message, "✅ هەموو کۆدە بەکارنەهاتووەکان سڕانەوە.")
+    bot.reply_to(message, "✅ هەموو کۆدەکان سڕانەوە.")
 
 @bot.message_handler(commands=["backup"])
 def cmd_backup(message):
@@ -550,136 +704,21 @@ def cmd_backup(message):
     try:
         with open(DB_PATH, 'rb') as f:
             bot.send_document(message.chat.id, f, caption="📁 <b>Backup Database</b>")
-    except Exception as e:
-        bot.reply_to(message, f"❌ کێشە لە داگرتنی فایل: {e}")
+    except Exception as e: bot.reply_to(message, f"❌ هەڵە: {e}")
 
 # ==========================================
-# 5. هەندلەرەکانی بەکارهێنەر
+# 7. هەندلەرەکانی سەرەکی (بەکارهێنەر)
 # ==========================================
 @bot.message_handler(commands=["start"])
 def cmd_start(message):
     log_user(message)
-    if message.from_user.id != ADMIN_ID and get_bot_status() == "off": return
-    banned, until = check_ban(message.from_user.id)
-    if banned and message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, f"🚫 تۆ بلۆککراویت. کاتی کردنەوە: {until}")
-        return
-    bot.send_message(message.chat.id, "💀 <b>BLACK HAT AI PRIME CORE v65.0</b> 💀\n\nسیستەمەکە بە تەواوی نوێ کرایەوە و ئێستا لە ئاستی پریمیۆمدایە.\n🌐 <b>وێب:</b> وێنەی دیزاین بنێرە، پاشان زمان بنووسە." + get_signature())
-
-@bot.message_handler(commands=["help"])
-def cmd_help(message):
-    log_user(message)
     
-    help_text = (
-        "🛠 <b>لیستی توڵەکان و فەرمانەکان:</b>\n\n"
-        "🌐 <b>1. دروستکردنی وێبسایت (Web Design):</b>\n"
-        "   وێنەیەکی دیزاین بنێرە، پاشان ناوی زمانەکە بنووسە (HTML, CSS, JS, PHP, Python, React) بۆ ئەوەی کۆدەکەت بۆ دروست بکەم.\n\n"
-        "💻 <b>2. شیکاری ئاسایش و هەکینگ (Cyber Security & IT):</b>\n"
-        "   هەر پرسیارێک لەبارەی هەکینگ، تۆڕ، سێرڤەر، لینوکس، یان پڕۆگرامسازی بنووسە، سیستەمەکە شیکاری تەکنیکی بۆ دەکات.\n\n"
-        "🔍 <b>3. گەڕانی پێشکەوتوو:</b>\n"
-        "   هەر بابەتێکی تەکنیکی بنووسە، بۆتەکە بە زیرەکی دەگەڕێت و پوختەی پێ دەدەیت.\n\n"
-        "🎁 <b>4. سیستەمی خەڵات (Credits):</b>\n"
-        "   <code>/gift [کۆد]</code> — بەکارهێنانی کۆدی خەڵات بۆ زیادکردنی پرسیار.\n"
-        "   <code>/credit</code> — بینینی ژمارەی پرسیارەکانی خەڵاتی ماوە.\n\n"
-        "👑 <b>5. پەیوەندی و پشتگیری:</b>\n"
-        "   بۆ هەر کێشەیەک یان پرسیارێک، پەیوەندی بکە بە: @ALONE427 یان @malikdlashad3"
-    )
-    bot.reply_to(message, help_text + get_signature())
-
-@bot.message_handler(commands=["gift"])
-def cmd_gift(message):
-    log_user(message)
-    if message.from_user.id != ADMIN_ID and get_bot_status() == "off": return
-    banned, _ = check_ban(message.from_user.id)
-    if banned and message.from_user.id != ADMIN_ID: return
-    
-    parts = message.text.split(maxsplit=1)
-    if len(parts) < 2:
-        bot.reply_to(message, "🎁 کۆدی خەڵات بنووسە: <code>/gift BUGFIX-1234-X100</code>")
-        return
-    ok, reason, reward = redeem_gift(message.from_user.id, parts[1])
-    if ok:
-        bot.reply_to(message, f"🎉 <b>پیرۆزە!</b> کۆدەکەت کارا بوو و {reward} پرسیارت زیادکرا.")
-    else:
-        bot.reply_to(message, f"❌ {reason}")
-
-@bot.message_handler(commands=["credit"])
-def cmd_credit(message):
-    log_user(message)
-    if message.from_user.id != ADMIN_ID and get_bot_status() == "off": return
-    row = db().execute("SELECT questions_left FROM credit WHERE user_id=?", (message.from_user.id,)).fetchone()
-    bot.reply_to(message, f"📊 پرسیارەکانی خەڵات: <b>{row[0] if row else 0}</b>")
-
-@bot.message_handler(content_types=["photo"])
-def handle_photo(message):
-    log_user(message)
-    if message.from_user.id != ADMIN_ID and get_bot_status() == "off": return
-    banned, until = check_ban(message.from_user.id)
-    if banned and message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, f"🚫 تۆ بلۆککراویت. کاتی کردنەوە: {until}")
-        return
-        
-    set_state(message.from_user.id, "wait_lang")
-    bot.reply_to(message, "📷 <b>وێنە وەرگیرا.</b>\nئێستا ناوی زمانەکە بنووسە: <code>HTML</code>, <code>CSS</code>, <code>JS</code>, <code>PHP</code>, <code>Python</code>.")
-
-@bot.message_handler(func=lambda m: not m.text.startswith("/"), content_types=["text"])
-def handle_text(message):
-    log_user(message)
-    
-    if message.from_user.id != ADMIN_ID and get_bot_status() == "off": return
-    banned, until = check_ban(message.from_user.id)
-    if banned and message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, f"🚫 تۆ بلۆککراویت. کاتی کردنەوە: {until}")
-        return
-
-    uid = message.from_user.id
-    q = message.text.strip()
-    ql = q.lower()
-    state, _ = get_state(uid)
-
-    if state == "wait_lang":
-        found_lang = None
-        for k, v in LANG_MAP.items():
-            if re.search(rf'\b{k}\b', ql):
-                found_lang = v
-                break
-        if not found_lang:
-            bot.reply_to(message, "❓ زمان نەناسرا. تکایە بنووسە: HTML، CSS، JS، PHP، Python یان React.")
-            return
-        clear_state(uid)
-        code = _web_template(found_lang)
-        safe_code = html.escape(code)
-        bot.reply_to(message, f"✨ <b>کۆد بۆ {found_lang} ئامادەیە:</b>\n<pre><code>{safe_code}</code></pre>")
-        return
-
-    if any(k in ql for k in ("کێ دروست", "who made you", "خاوەنی تۆ")):
-        bot.reply_to(message, "من لەلایەن @ALONE427 و @malikdlashad3 ـەوە دروستکراوم. 👑")
-        return
-        
-    if any(k in ql for k in ("سڵاو", "hello", "hi", "hey")):
-        bot.reply_to(message, "سڵاو بەخێربێیت بۆ سیستەمی ئاسایش و پڕۆگرامسازی. 🌐\nچۆن دەتوانم یارمەتیت بدەم لەم بوارەدا؟" + get_signature())
-        return
-
-    if not is_allowed(q):
-        bot.reply_to(message, "❌ تەنها بابەتی <b>Hacking، Cyber Security، IT، پڕۆگرامسازی</b> وەڵام دەدرێتەوە.")
-        return
-
-    is_tool = any(w in ql for w in ("توڵ", "سکریپت", "payload", "پەیلوود", "exploit", "ddos", "دروست بکە", "کۆد"))
-    if is_tool and uid != ADMIN_ID and not spend_credit(uid):
-        bot.reply_to(message, "🔒 بۆ داواکاری توڵ/کۆد پێویستە کۆدی خەڵات بەکاربهێنە: <code>/gift [کۆد]</code>")
-        return
-
-    msg = bot.reply_to(message, "🧠 <b>سیستەمی زیرەک شیکاری دەکات...</b>")
-    
-    ai_response = get_prime_ai_response(q)
-    res = f"{ai_response}" + get_signature()
-    
-    try:
-        bot.edit_message_text(res, chat_id=message.chat.id, message_id=msg.message_id, parse_mode="HTML")
-    except Exception:
-        bot.send_message(message.chat.id, res)
-
-if __name__ == "__main__":
-    init_db()
-    logger.info("v65.0 Prime AI (Gemini) is up and running. absolute olliE.")
-    bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    # پشکنینی ریفێراڵ
+    args = message.text.split()
+    if len(args) > 1 and args[1].startswith("ref_"):
+        try:
+            ref_id = int(args[1].replace("ref_", ""))
+            if ref_id != message.from_user.id:
+                row = db().execute("SELECT referred_by FROM users WHERE user_id=?", (message.from_user.id,)).fetchone()
+                if row and row[0] is None:
+                    db().execute("UPDATE users SET referred_by=? WHERE user_id
