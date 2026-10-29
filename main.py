@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-BLACK HAT AI PRIME — THE 2000+ LINE ULTIMATE SUPER ADMIN SYSTEM
+BLACK HAT AI PRIME — THE ULTIMATE SUPER ADMIN BULLETPROOF SYSTEM
 ================================================================================
 This file is the absolute maximum capacity single-file architecture.
 It includes a massive local database of 100+ hacking tools, robust state
@@ -17,14 +17,10 @@ Features:
 6. RAW GITHUB CODE EXTRACTOR for fallback.
 7. ULTRA-DETAILED Termux/Nano instructions appended to every tool.
 8. Complete Admin Panel with 20 features.
-9. DUAL-LEVEL ADMIN SYSTEM:
-   - Super Admin (Hardcoded): Full access to all 20 panel features.
-   - Simple Admin (Dynamic): Infinite credits, but NO panel access.
-10. TIME-LIMITED PROMOTIONS: Promote to Simple Admin for h (hours), w (weeks),
-    m (months), or forever.
-11. DYNAMIC /help: Shows current credits for normal users.
-12. SMART HTML SPLITTER: Prevents Telegram parse errors on long messages.
-13. RATELIMIT HANDLER: Graceful fallback when DuckDuckGo blocks requests.
+9. DUAL-LEVEL ADMIN SYSTEM (Super & Simple).
+10. SMART BAN: Defaults to forever if no time is specified.
+11. GHOST BAN: Can ban users who haven't started the bot yet.
+12. 1-YEAR ONLINE TRACKING.
 ================================================================================
 """
 
@@ -437,7 +433,7 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('maintenance', 'off')")
 
 # ==============================================================================
-# 7. USER & CREDIT HELPERS (DUAL-LEVEL ADMIN)
+# 7. USER & CREDIT HELPERS (BULLETPROOF)
 # ==============================================================================
 
 def is_super_admin(user_id):
@@ -446,10 +442,8 @@ def is_super_admin(user_id):
 def is_simple_admin(user_id):
     with db() as conn:
         row = conn.execute("SELECT admin_until FROM users WHERE user_id=?", (user_id,)).fetchone()
-        if not row or not row[0]:
-            return False
-        if row[0] == "forever":
-            return True
+        if not row or not row[0]: return False
+        if row[0] == "forever": return True
         try:
             until = datetime.fromisoformat(row[0])
             if datetime.utcnow() > until:
@@ -463,22 +457,30 @@ def is_admin(user_id):
     return is_super_admin(user_id) or is_simple_admin(user_id)
 
 def set_admin_time(user_id, duration_str):
+    """Promotes a user to Simple Admin, even if they aren't in the DB yet."""
     now = datetime.utcnow()
+    duration_str = duration_str.lower().strip()
+    
     if duration_str == "forever":
         val = "forever"
     else:
-        m = {"h": 1/24, "w": 7, "m": 30}
         unit = duration_str[-1]
-        amt = int(duration_str[:-1])
+        amt_str = duration_str[:-1]
+        if not amt_str.isdigit(): return False
+        amt = int(amt_str)
+        m = {"h": 1/24, "w": 7, "m": 30}
         if unit not in m: return False
         val = (now + timedelta(days=amt * m[unit])).isoformat()
     
     with db() as conn:
+        # Ensure user exists first to prevent silent update failures
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
         conn.execute("UPDATE users SET admin_until=? WHERE user_id=?", (val, user_id))
     return True
 
 def remove_admin(user_id):
     with db() as conn:
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
         conn.execute("UPDATE users SET admin_until=NULL WHERE user_id=?", (user_id,))
 
 def ensure_user(user):
@@ -554,15 +556,22 @@ def is_banned(user_id):
             return True
 
 def ban_user(user_id, duration):
+    """Bans a user, even if they aren't in the DB yet."""
+    duration = duration.lower().strip()
     if duration == "forever":
         val = "forever"
     else:
-        m = {"h": 1/24, "d": 1, "w": 7, "m": 30}
         unit = duration[-1]
-        amt = int(duration[:-1])
+        amt_str = duration[:-1]
+        if not amt_str.isdigit(): return False
+        amt = int(amt_str)
+        m = {"h": 1/24, "d": 1, "w": 7, "m": 30}
         if unit not in m: return False
         val = (datetime.utcnow() + timedelta(days=amt * m[unit])).isoformat()
+        
     with db() as conn:
+        # Ensure user exists first to prevent silent update failures
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
         conn.execute("UPDATE users SET banned_until=? WHERE user_id=?", (val, user_id))
     return True
 
@@ -780,7 +789,7 @@ def show_panel(message):
 
 def handle_admin_command(message, cmd, query):
     uid = message.from_user.id
-    parts = query.split(maxsplit=2)
+    parts = query.split()
     
     # 1. /system
     if cmd == "/system":
@@ -828,99 +837,128 @@ def handle_admin_command(message, cmd, query):
         return bot.send_document(message.chat.id, ("users.csv", csv_data.encode()), caption=f"📁 {len(rows)} بەکارهێنەر")
 
     # 4. /promote <id> <time>
-    elif cmd == "/promote" and len(parts) == 3:
-        try: uid_target = int(parts[1])
-        except: return bot.reply_to(message, "ID هەڵەیە.")
-        duration = parts[2].lower()
-        if set_admin_time(uid_target, duration):
-            log_admin(uid, "promote", f"{uid_target} ({duration})")
-            return bot.reply_to(message, f"⭐ ئەدمینی سادە کرا: <code>{uid_target}</code> بۆ ماوەی ({duration})")
-        return bot.reply_to(message, "شێواز هەڵەیە. بۆ نموونە: /promote 123456 24h یان forever")
+    elif cmd == "/promote":
+        if len(parts) >= 2:
+            try: target = int(parts[1])
+            except: return bot.reply_to(message, "ID هەڵەیە.")
+            
+            # Default to forever if no time provided
+            duration = parts[2].lower() if len(parts) >= 3 else "forever"
+            
+            if set_admin_time(target, duration):
+                log_admin(uid, "promote", f"{target} ({duration})")
+                return bot.reply_to(message, f"⭐ ئەدمینی سادە کرا: <code>{target}</code> بۆ ماوەی ({duration})")
+            return bot.reply_to(message, "شێواز هەڵەیە. بۆ نموونە: /promote 123456 24h")
+        return bot.reply_to(message, "شێواز: /promote <id> <time>")
 
     # 5. /demote <id>
-    elif cmd == "/demote" and len(parts) >= 2:
-        try: uid_target = int(parts[1])
-        except: return bot.reply_to(message, "ID هەڵەیە.")
-        remove_admin(uid_target)
-        log_admin(uid, "demote", str(uid_target))
-        return bot.reply_to(message, f"🚫 لابرا لە ئەدمینی: <code>{uid_target}</code>")
+    elif cmd == "/demote":
+        if len(parts) >= 2:
+            try: target = int(parts[1])
+            except: return bot.reply_to(message, "ID هەڵەیە.")
+            remove_admin(target)
+            log_admin(uid, "demote", str(target))
+            return bot.reply_to(message, f"🚫 لابرا لە ئەدمینی: <code>{target}</code>")
+        return bot.reply_to(message, "شێواز: /demote <id>")
 
     # 6. /ban
-    elif cmd == "/ban" and len(parts) == 3:
-        try: uid_target = int(parts[1])
-        except: return bot.reply_to(message, "ID هەڵەیە.")
-        if ban_user(uid_target, parts[2].lower()):
-            log_admin(uid, "ban", str(uid_target))
-            return bot.reply_to(message, f"🚫 باند کرا: <code>{uid_target}</code>")
-        return bot.reply_to(message, "ماوەکە هەڵەیە. بۆ نموونە: 1d یان forever")
+    elif cmd == "/ban":
+        if len(parts) >= 2:
+            try: target = int(parts[1])
+            except: return bot.reply_to(message, "ID هەڵەیە.")
+            
+            # Default to forever if no time provided
+            duration = parts[2].lower() if len(parts) >= 3 else "forever"
+            
+            if ban_user(target, duration):
+                log_admin(uid, "ban", str(target))
+                return bot.reply_to(message, f"🚫 باند کرا: <code>{target}</code> بۆ ({duration})")
+            return bot.reply_to(message, "ماوەکە هەڵەیە. بۆ نموونە: 1d یان forever")
+        return bot.reply_to(message, "شێواز: /ban <id> <time>")
 
     # 7. /unban
-    elif cmd == "/unban" and len(parts) >= 2:
-        try: uid_target = int(parts[1])
-        except: return bot.reply_to(message, "ID هەڵەیە.")
-        with db() as conn: conn.execute("UPDATE users SET banned_until=NULL WHERE user_id=?", (uid_target,))
-        log_admin(uid, "unban", str(uid_target))
-        return bot.reply_to(message, f"✅ لابرا: <code>{uid_target}</code>")
+    elif cmd == "/unban":
+        if len(parts) >= 2:
+            try: target = int(parts[1])
+            except: return bot.reply_to(message, "ID هەڵەیە.")
+            with db() as conn:
+                conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (target,))
+                conn.execute("UPDATE users SET banned_until=NULL WHERE user_id=?", (target,))
+            log_admin(uid, "unban", str(target))
+            return bot.reply_to(message, f"✅ لابرا: <code>{target}</code>")
+        return bot.reply_to(message, "شێواز: /unban <id>")
 
     # 8. /credit & 9. /credit2
-    elif cmd in ("/credit", "/credit2") and len(parts) == 3:
-        try:
-            uid_target = int(parts[1])
-            amt = int(parts[2])
-        except: return bot.reply_to(message, "ID یان ژمارە هەڵەیە.")
-        sign = 1 if cmd == "/credit" else -1
-        with db() as conn:
-            row = conn.execute("SELECT credits FROM users WHERE user_id=?", (uid_target,)).fetchone()
-            if row:
-                new_val = max(0, row[0] + (sign * amt))
-                conn.execute("UPDATE users SET credits=? WHERE user_id=?", (new_val, uid_target))
-                log_admin(uid, cmd, f"{uid_target} -> {new_val}")
-                return bot.reply_to(message, f"💳 <code>{uid_target}</code> → <b>{new_val}</b>")
-        return bot.reply_to(message, "بەکارهێنەر نەدۆزرایەوە.")
+    elif cmd in ("/credit", "/credit2"):
+        if len(parts) == 3:
+            try:
+                target = int(parts[1])
+                amt = int(parts[2])
+            except: return bot.reply_to(message, "ID یان ژمارە هەڵەیە.")
+            sign = 1 if cmd == "/credit" else -1
+            with db() as conn:
+                conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (target,))
+                row = conn.execute("SELECT credits FROM users WHERE user_id=?", (target,)).fetchone()
+                if row:
+                    new_val = max(0, row[0] + (sign * amt))
+                    conn.execute("UPDATE users SET credits=? WHERE user_id=?", (new_val, target))
+                    log_admin(uid, cmd, f"{target} -> {new_val}")
+                    return bot.reply_to(message, f"💳 <code>{target}</code> → <b>{new_val}</b>")
+            return bot.reply_to(message, "بەکارهێنەر نەدۆزرایەوە.")
+        return bot.reply_to(message, "شێواز: /credit <id> <amount>")
 
     # 10. /letter
-    elif cmd == "/letter" and len(parts) >= 2:
-        text = parts[1] if len(parts) == 2 else parts[1] + " " + parts[2]
-        with db() as conn: ids = [r[0] for r in conn.execute("SELECT user_id FROM users").fetchall()]
-        sent = 0
-        for u in ids:
-            try:
-                bot.send_message(u, f"📨 <b>پەیام لە ئەدمین:</b>\n\n{safe_html(text)}")
-                sent += 1
-                time.sleep(0.05)
-            except: pass
-        log_admin(uid, "broadcast", f"sent {sent}")
-        return bot.reply_to(message, f"✅ نێردرا: {sent}")
+    elif cmd == "/letter":
+        if len(parts) >= 2:
+            text = " ".join(parts[1:])
+            with db() as conn: ids = [r[0] for r in conn.execute("SELECT user_id FROM users").fetchall()]
+            sent = 0
+            for u in ids:
+                try:
+                    bot.send_message(u, f"📨 <b>پەیام لە ئەدمین:</b>\n\n{safe_html(text)}")
+                    sent += 1
+                    time.sleep(0.05)
+                except: pass
+            log_admin(uid, "broadcast", f"sent {sent}")
+            return bot.reply_to(message, f"✅ نێردرا: {sent}")
+        return bot.reply_to(message, "شێواز: /letter <text>")
 
     # 11. /letter2
-    elif cmd == "/letter2" and len(parts) == 3:
-        try: uid_target = int(parts[1])
-        except: return bot.reply_to(message, "ID هەڵەیە.")
-        try:
-            bot.send_message(uid_target, f"📨 <b>پەیام لە ئەدمین:</b>\n\n{safe_html(parts[2])}")
-            log_admin(uid, "direct_msg", str(uid_target))
-            return bot.reply_to(message, "✅ نێردرا.")
-        except: return bot.reply_to(message, "❌ شکست.")
+    elif cmd == "/letter2":
+        if len(parts) >= 3:
+            try: target = int(parts[1])
+            except: return bot.reply_to(message, "ID هەڵەیە.")
+            text = " ".join(parts[2:])
+            try:
+                bot.send_message(target, f"📨 <b>پەیام لە ئەدمین:</b>\n\n{safe_html(text)}")
+                log_admin(uid, "direct_msg", str(target))
+                return bot.reply_to(message, "✅ نێردرا.")
+            except: return bot.reply_to(message, "❌ شکست.")
+        return bot.reply_to(message, "شێواز: /letter2 <id> <text>")
 
     # 12. /history
-    elif cmd == "/history" and len(parts) >= 2:
-        try: uid_target = int(parts[1])
-        except: return bot.reply_to(message, "ID هەڵەیە.")
-        with db() as conn:
-            rows = conn.execute("SELECT type, content, created_at FROM requests WHERE user_id=? ORDER BY id DESC LIMIT 15", (uid_target,)).fetchall()
-        if not rows: return bot.reply_to(message, "هیچ داواکارییەک نییە.")
-        text = f"📜 <b>داواکارییەکانی</b> <code>{uid_target}</code>\n\n"
-        for r in rows: text += f"• [{r[0]}] {r[2]}\n  {safe_html((r[1] or '')[:100])}\n"
-        return bot.send_message(message.chat.id, text)
+    elif cmd == "/history":
+        if len(parts) >= 2:
+            try: target = int(parts[1])
+            except: return bot.reply_to(message, "ID هەڵەیە.")
+            with db() as conn:
+                rows = conn.execute("SELECT type, content, created_at FROM requests WHERE user_id=? ORDER BY id DESC LIMIT 15", (target,)).fetchall()
+            if not rows: return bot.reply_to(message, "هیچ داواکارییەک نییە.")
+            text = f"📜 <b>داواکارییەکانی</b> <code>{target}</code>\n\n"
+            for r in rows: text += f"• [{r[0]}] {r[2]}\n  {safe_html((r[1] or '')[:100])}\n"
+            return bot.send_message(message.chat.id, text)
+        return bot.reply_to(message, "شێواز: /history <id>")
 
     # 13. /maintenance
-    elif cmd == "/maintenance" and len(parts) >= 2:
-        state = parts[1].lower()
-        if state in ("on", "off"):
-            set_maintenance_mode(state)
-            log_admin(uid, "maintenance", state)
-            return bot.reply_to(message, f"🛠 دۆخی چاککردنەوە: <b>{state.upper()}</b>")
-        return bot.reply_to(message, "شێواز: /maintenance on یان off")
+    elif cmd == "/maintenance":
+        if len(parts) >= 2:
+            state = parts[1].lower()
+            if state in ("on", "off"):
+                set_maintenance_mode(state)
+                log_admin(uid, "maintenance", state)
+                return bot.reply_to(message, f"🛠 دۆخی چاککردنەوە: <b>{state.upper()}</b>")
+            return bot.reply_to(message, "شێواز: /maintenance on یان off")
+        return bot.reply_to(message, "شێواز: /maintenance <on|off>")
 
     # 14. /logs
     elif cmd == "/logs":
@@ -937,14 +975,17 @@ def handle_admin_command(message, cmd, query):
         return bot.reply_to(message, "فایل نەدۆزرایەوە.")
 
     # 16. /reset_user
-    elif cmd == "/reset_user" and len(parts) >= 2:
-        try: uid_target = int(parts[1])
-        except: return bot.reply_to(message, "ID هەڵەیە.")
-        with db() as conn:
-            conn.execute("UPDATE users SET credits=5, banned_until=NULL, admin_until=NULL WHERE user_id=?", (uid_target,))
-            conn.execute("DELETE FROM chat_history WHERE user_id=?", (uid_target,))
-        log_admin(uid, "reset", str(uid_target))
-        return bot.reply_to(message, f"🔄 ڕیسێت کرا: <code>{uid_target}</code>")
+    elif cmd == "/reset_user":
+        if len(parts) >= 2:
+            try: target = int(parts[1])
+            except: return bot.reply_to(message, "ID هەڵەیە.")
+            with db() as conn:
+                conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (target,))
+                conn.execute("UPDATE users SET credits=5, banned_until=NULL, admin_until=NULL WHERE user_id=?", (target,))
+                conn.execute("DELETE FROM chat_history WHERE user_id=?", (target,))
+            log_admin(uid, "reset", str(target))
+            return bot.reply_to(message, f"🔄 ڕیسێت کرا: <code>{target}</code>")
+        return bot.reply_to(message, "شێواز: /reset_user <id>")
 
     # 17. /ping
     elif cmd == "/ping":
@@ -963,12 +1004,14 @@ def handle_admin_command(message, cmd, query):
         return show_panel(message)
 
     # 20. /sudo <id> <cmd>
-    elif cmd == "/sudo" and len(parts) >= 3:
-        try: uid_target = int(parts[1])
-        except: return bot.reply_to(message, "ID هەڵەیە.")
-        sudo_cmd = parts[2]
-        log_admin(uid, "sudo", f"{uid_target} -> {sudo_cmd}")
-        return bot.reply_to(message, f"🎭 فەرمانەکە بە ناوی <code>{uid_target}</code> جێبەجێ کرا: {safe_html(sudo_cmd)}")
+    elif cmd == "/sudo":
+        if len(parts) >= 3:
+            try: target = int(parts[1])
+            except: return bot.reply_to(message, "ID هەڵەیە.")
+            sudo_cmd = " ".join(parts[2:])
+            log_admin(uid, "sudo", f"{target} -> {sudo_cmd}")
+            return bot.reply_to(message, f"🎭 فەرمانەکە بە ناوی <code>{target}</code> جێبەجێ کرا: {safe_html(sudo_cmd)}")
+        return bot.reply_to(message, "شێواز: /sudo <id> <command>")
 
     return bot.reply_to(message, "فەرمانەکە نەدۆزرایەوە یان هەڵەیە.")
 
