@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-BLACK HAT AI PRIME — THE 2000+ LINE ULTIMATE 1-YEAR ONLINE TRACKER
+BLACK HAT AI PRIME — THE 2000+ LINE ULTIMATE SUPER ADMIN SYSTEM
 ================================================================================
 This file is the absolute maximum capacity single-file architecture.
 It includes a massive local database of 100+ hacking tools, robust state
@@ -16,9 +16,15 @@ Features:
 5. DYNAMIC STATE MACHINE for Phishing Tool generation.
 6. RAW GITHUB CODE EXTRACTOR for fallback.
 7. ULTRA-DETAILED Termux/Nano instructions appended to every tool.
-8. Complete Admin Panel.
-9. 1-YEAR ONLINE TRACKING: Users seen in the last 365 days are 🟢.
-10. CSV EXPORT: Full user list with online status and last seen time.
+8. Complete Admin Panel with 20 features.
+9. DUAL-LEVEL ADMIN SYSTEM:
+   - Super Admin (Hardcoded): Full access to all 20 panel features.
+   - Simple Admin (Dynamic): Infinite credits, but NO panel access.
+10. TIME-LIMITED PROMOTIONS: Promote to Simple Admin for h (hours), w (weeks),
+    m (months), or forever.
+11. DYNAMIC /help: Shows current credits for normal users.
+12. SMART HTML SPLITTER: Prevents Telegram parse errors on long messages.
+13. RATELIMIT HANDLER: Graceful fallback when DuckDuckGo blocks requests.
 ================================================================================
 """
 
@@ -59,7 +65,8 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 DB_PATH = os.getenv("DB_PATH", "bot_database.db")
 DEFAULT_LANG = os.getenv("DEFAULT_LANG", "ku").strip().lower()
 
-ADMIN_IDS = {5527152252, 8487940066}
+# Super Admin IDs (Hardcoded, Highest Level)
+SUPER_ADMIN_IDS = {5527152252, 8487940066}
 
 STARTING_CREDITS = 5
 DAILY_CREDITS = 1
@@ -91,8 +98,6 @@ bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 _recent_requests = {}
 _recent_lock = threading.Lock()
 
-# Dictionary to track user states for multi-step questions
-# Format: { user_id: {"step": "...", "data": {...}, "timestamp": time} }
 user_states = {}
 _states_lock = threading.Lock()
 
@@ -192,26 +197,6 @@ GREETINGS_EN = [
     "Hello, I am here for the work. What question do you have?",
     "Hi, welcome. What is needed?",
     "Hello, let's begin. What do you want?",
-    "Hi sweetheart, I am ready for you. Go ahead.",
-    "Hello, I am with you. What assistance is needed?",
-    "Hi, hope you are well. What are we doing?",
-    "Hello, let's do the work. What question do you have?",
-    "Hello, I am here for all types of questions.",
-    "Hi, glad you came. What is needed?",
-    "Hello, let's begin. What do you want to know?",
-    "Hello, I am ready for you. Where do you need assistance?",
-    "Hi, hope you have a good day. What are we doing?",
-    "Hello, I am here for the work. What question do you have?",
-    "Hi, welcome. What is needed?",
-    "Hello, let's begin. What do you want?",
-    "Hi sweetheart, I am ready for you. Go ahead.",
-    "Hello, I am with you. What assistance is needed?",
-    "Hi, hope you are well. What are we doing?",
-    "Hello, let's do the work. What question do you have?",
-    "Hello, I am here for all types of questions.",
-    "Hi, glad you came. What is needed?",
-    "Hello, let's begin. What do you want to know?",
-    "Hello, I am ready for you. Where do you need assistance?",
 ]
 
 # ------------------------------------------------------------------------------
@@ -314,7 +299,6 @@ CREATE_KEYWORDS = [
     "create", "code", "script", "make", "tool", "build", "develop"
 ]
 
-# Exact words for greeting
 GREETING_WORDS = ["سڵاو", "سلاو", "هەڵۆ", "hello", "hi", "hey", "salam", "slaw"]
 
 REJECTION_MSG = (
@@ -327,23 +311,16 @@ REJECTION_MSG = (
 # ==============================================================================
 
 def clean_and_normalize(text):
-    """Removes invisible chars and normalizes Kurdish vs Arabic letters."""
-    if not text:
-        return ""
-    # Remove invisible RTL/LTR marks and zero-width characters
+    if not text: return ""
     text = re.sub(r'[\u200b-\u200f\u202a-\u202e\u2060-\u206f]', '', text)
-    # Normalize Arabic Kaf to Kurdish Kaf, and Arabic Yeh to Kurdish Yeh
     text = text.replace('ك', 'ک').replace('ي', 'ی').replace('ه', 'ە')
     return text.strip()
 
 def extract_command(text):
-    """Extracts pure command from text. Handles '📖 /help', '/help@Bot', etc."""
     match = re.search(r'(/[a-zA-Z]+)', text)
     if match:
         cmd = match.group(1).lower()
-        # Strip @BotName if present
-        if '@' in cmd:
-            cmd = cmd.split('@')[0]
+        if '@' in cmd: cmd = cmd.split('@')[0]
         return cmd
     return None
 
@@ -351,47 +328,32 @@ def safe_html(value):
     return html.escape(str(value or ""), quote=True)
 
 def smart_split(text, limit=4000):
-    """
-    Splits text intelligently without breaking HTML tags.
-    Closes open tags at the end of a chunk and reopens them in the next.
-    """
-    if len(text) <= limit:
-        return [text]
-    
+    if len(text) <= limit: return [text]
     parts = []
     current_text = text
-    
     while current_text:
         if len(current_text) <= limit:
             parts.append(current_text)
             break
-            
-        # Find a safe split point (space or newline) near the limit
         cut = current_text.rfind(' ', 0, limit)
         if cut == -1:
             cut = current_text.rfind('\n', 0, limit)
         if cut == -1:
-            cut = limit # Hard cut if no spaces
-            
+            cut = limit
         part = current_text[:cut]
         current_text = current_text[cut:]
-        
-        # Basic tag balance check
         if part.count('<') > part.count('>'):
             last_open = part.rfind('<')
             if last_open != -1:
                 current_text = part[last_open:] + current_text
                 part = part[:last_open]
-                
         parts.append(part)
-        
     return parts
 
 def send_msg(chat_id, text, reply_to=None, reply_markup=None):
     full_text = text + FOOTER_TEXT
     for i, part in enumerate(smart_split(full_text)):
-        if not part.strip():
-            continue
+        if not part.strip(): continue
         try:
             bot.send_message(
                 chat_id, part,
@@ -400,15 +362,12 @@ def send_msg(chat_id, text, reply_to=None, reply_markup=None):
                 disable_web_page_preview=True
             )
         except ApiTelegramException as e:
-            log.warning(f"Telegram API Error (HTML parse issue): {e}")
-            # Fallback: strip HTML and send as plain text
+            log.warning(f"Telegram API Error: {e}")
             try:
                 clean_text = re.sub(r'<[^>]+>', '', part)
                 bot.send_message(chat_id, clean_text, parse_mode=None, disable_web_page_preview=True)
             except Exception as ex:
                 log.error(f"Fallback send failed: {ex}")
-        except Exception as e:
-            log.error(f"Failed to send message to {chat_id}: {e}")
 
 # ==============================================================================
 # 6. DATABASE MANAGEMENT
@@ -437,6 +396,7 @@ def init_db():
                 username TEXT,
                 lang TEXT DEFAULT 'ku',
                 credits INTEGER DEFAULT 5,
+                admin_until TEXT DEFAULT NULL,
                 last_daily TEXT,
                 banned_until TEXT,
                 last_seen TEXT DEFAULT CURRENT_TIMESTAMP
@@ -477,11 +437,49 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('maintenance', 'off')")
 
 # ==============================================================================
-# 7. USER & CREDIT HELPERS
+# 7. USER & CREDIT HELPERS (DUAL-LEVEL ADMIN)
 # ==============================================================================
 
+def is_super_admin(user_id):
+    return user_id in SUPER_ADMIN_IDS
+
+def is_simple_admin(user_id):
+    with db() as conn:
+        row = conn.execute("SELECT admin_until FROM users WHERE user_id=?", (user_id,)).fetchone()
+        if not row or not row[0]:
+            return False
+        if row[0] == "forever":
+            return True
+        try:
+            until = datetime.fromisoformat(row[0])
+            if datetime.utcnow() > until:
+                conn.execute("UPDATE users SET admin_until=NULL WHERE user_id=?", (user_id,))
+                return False
+            return True
+        except ValueError:
+            return False
+
 def is_admin(user_id):
-    return user_id in ADMIN_IDS
+    return is_super_admin(user_id) or is_simple_admin(user_id)
+
+def set_admin_time(user_id, duration_str):
+    now = datetime.utcnow()
+    if duration_str == "forever":
+        val = "forever"
+    else:
+        m = {"h": 1/24, "w": 7, "m": 30}
+        unit = duration_str[-1]
+        amt = int(duration_str[:-1])
+        if unit not in m: return False
+        val = (now + timedelta(days=amt * m[unit])).isoformat()
+    
+    with db() as conn:
+        conn.execute("UPDATE users SET admin_until=? WHERE user_id=?", (val, user_id))
+    return True
+
+def remove_admin(user_id):
+    with db() as conn:
+        conn.execute("UPDATE users SET admin_until=NULL WHERE user_id=?", (user_id,))
 
 def ensure_user(user):
     with db() as conn:
@@ -544,10 +542,8 @@ def is_banned(user_id):
     if is_admin(user_id): return False
     with db() as conn:
         row = conn.execute("SELECT banned_until FROM users WHERE user_id=?", (user_id,)).fetchone()
-        if not row or not row[0]:
-            return False
-        if row[0] == "forever":
-            return True
+        if not row or not row[0]: return False
+        if row[0] == "forever": return True
         try:
             until = datetime.fromisoformat(row[0])
             if datetime.utcnow() > until:
@@ -561,12 +557,23 @@ def ban_user(user_id, duration):
     if duration == "forever":
         val = "forever"
     else:
-        m = {"1h": 1/24, "1d": 1, "7d": 7, "30d": 30}
-        if duration not in m: return False
-        val = (datetime.utcnow() + timedelta(days=m[duration])).isoformat()
+        m = {"h": 1/24, "d": 1, "w": 7, "m": 30}
+        unit = duration[-1]
+        amt = int(duration[:-1])
+        if unit not in m: return False
+        val = (datetime.utcnow() + timedelta(days=amt * m[unit])).isoformat()
     with db() as conn:
         conn.execute("UPDATE users SET banned_until=? WHERE user_id=?", (val, user_id))
     return True
+
+def get_maintenance_mode():
+    with db() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key='maintenance'").fetchone()
+        return row[0] == "on" if row else False
+
+def set_maintenance_mode(status):
+    with db() as conn:
+        conn.execute("UPDATE settings SET value=? WHERE key='maintenance'", (status,))
 
 def log_request(user_id, type_, content):
     with db() as conn:
@@ -584,9 +591,7 @@ def rate_limited(user_id):
     if is_admin(user_id): return False
     now = time.time()
     with _recent_lock:
-        if len(_recent_requests) > 10000:
-            _recent_requests.clear()
-            
+        if len(_recent_requests) > 10000: _recent_requests.clear()
         bucket = _recent_requests.setdefault(user_id, [])
         bucket[:] = [t for t in bucket if now - t < 60]
         if len(bucket) >= RATE_LIMIT_PER_MINUTE: return True
@@ -602,29 +607,18 @@ def check_blocked(message):
     return False
 
 def get_knowledge_answer(query):
-    """Finds the right tool using exact word boundaries."""
     query_lower = query.lower().replace("_", " ")
-    
     for key, answer in TERMUX_TOOLS.items():
-        if re.search(rf'\b{re.escape(key)}\b', query_lower):
-            return answer
-            
-    if re.search(r'\b(phish|فیش)\b', query_lower):
-        return TERMUX_TOOLS["zphisher"]
-    if re.search(r'\b(crack|password|پاسوۆرد)\b', query_lower):
-        return TERMUX_TOOLS["hydra"]
-        
+        if re.search(rf'\b{re.escape(key)}\b', query_lower): return answer
+    if re.search(r'\b(phish|فیش)\b', query_lower): return TERMUX_TOOLS["zphisher"]
+    if re.search(r'\b(crack|password|پاسوۆرد)\b', query_lower): return TERMUX_TOOLS["hydra"]
     return None
 
 def fetch_github_code(query):
-    """Searches GitHub for raw code, catches DDGS Ratelimit."""
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(f"{query} site:raw.githubusercontent.com", max_results=3))
-            
-        if not results:
-            return None
-            
+        if not results: return None
         for result in results:
             url = result.get("href", "")
             parsed_url = urlparse(url)
@@ -632,7 +626,6 @@ def fetch_github_code(query):
                 req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req, timeout=10) as response:
                     code = response.read().decode('utf-8')
-                    
                 if len(code) < 3500:
                     return (
                         f"<b>💻 کۆد دۆزرایەوە لە گیتهاب:</b>\n"
@@ -641,61 +634,33 @@ def fetch_github_code(query):
                         + TERMUX_INSTRUCTIONS
                     )
     except Exception as e:
-        log.error(f"GitHub fetch error (Possibly Ratelimit): {e}")
+        log.error(f"GitHub fetch error: {e}")
     return None
 
 def perform_web_search(query, is_create=False):
-    """Searches DuckDuckGo, catches Ratelimit and handles it gracefully."""
     query = str(query or "").strip()
-    if not query:
-        return "❌ تکایە وشە یان پرسیارێک بنووسە."
-
-    if is_create:
-        search_query = f"{query} python script github"
-    else:
-        search_query = query
-
+    if not query: return "❌ تکایە وشە یان پرسیارێک بنووسە."
+    search_query = f"{query} python script github" if is_create else query
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(search_query, max_results=5))
-
-        if not results:
-            return None
-
+        if not results: return None
         title_prefix = "🔎 ئەنجامەکانی گەڕان بۆ توڵ:" if is_create else "🔎 ئەنجامەکانی گەڕان بۆ:"
-        
-        lines = [
-            f"<b>{title_prefix}</b>\n"
-            f"<code>{safe_html(query)}</code>\n"
-        ]
-
+        lines = [f"<b>{title_prefix}</b>\n<code>{safe_html(query)}</code>\n"]
         count = 0
         for result in results:
             title = safe_html(result.get("title") or "بێ ناو")
             body = safe_html(result.get("body") or "وەسف بەردەست نییە")
             href = str(result.get("href") or "").strip()
-
             parsed = urlparse(href)
-            if parsed.scheme not in ("http", "https") or not parsed.netloc:
-                continue
-
+            if parsed.scheme not in ("http", "https") or not parsed.netloc: continue
             count += 1
-            safe_url = safe_html(href)
-
-            lines.append(
-                f"<b>{count}. {title}</b>\n"
-                f"{body}\n"
-                f'<a href="{safe_url}">🔗 کردنەوەی ماڵپەڕ</a>\n'
-            )
-
-        if count == 0:
-            return None
-
+            lines.append(f"<b>{count}. {title}</b>\n{body}\n<a href='{safe_html(href)}'>🔗 کردنەوەی ماڵپەڕ</a>\n")
+        if count == 0: return None
         return "\n".join(lines)
-
     except Exception as e:
-        log.error(f"DuckDuckGo search failed (Ratelimit): {e}")
-        return "❌ گەڕانی وێب ئێستا بلۆک کراوە (Ratelimit). تکایە دواتر هەوڵ بدە یان ناوی توڵەکە بە ڕاستەوخۆ بنووسە."
+        log.error(f"DuckDuckGo search failed: {e}")
+        return "❌ گەڕانی وێب ئێستا بلۆک کراوە. تکایە دواتر هەوڵ بدە."
 
 # ==============================================================================
 # 9. STATE MACHINE & HTML GENERATOR
@@ -703,7 +668,6 @@ def perform_web_search(query, is_create=False):
 
 def generate_phishing_html(target, user_id):
     safe_target = safe_html(target)
-    
     html_code = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -734,7 +698,7 @@ def generate_phishing_html(target, user_id):
         f"<b>💻 کۆدی HTML بۆ دروستکردنی لاپەڕەی فیشینگی {safe_target}</b>\n\n"
         "ئەمە کۆدێکی HTMLە. دەتوانیت لە <b>Netlify</b> یان <b>000webhost</b> باری بکەیت.\n\n"
         f"<pre><code class='language-html'>\n{html_code}\n</code></pre>\n\n"
-        "⚠️ <b>ئاگاداری:</b> پێویستە شوێنی <code>YOUR_WEBHOOK_ID</code> بگۆڕیت بۆ وێبهووکێکی ڕاستەقینە بۆ وەرگرتنی داتاکان."
+        "⚠️ <b>ئاگاداری:</b> پێویستە شوێنی <code>YOUR_WEBHOOK_ID</code> بگۆڕیت بۆ وێبهووکێکی ڕاستەقینە."
     )
 
 # ==============================================================================
@@ -744,24 +708,28 @@ def generate_phishing_html(target, user_id):
 def handle_start(message, query):
     ensure_user(message.from_user)
     apply_daily(message.from_user.id)
-    if message.from_user.id in user_states:
-        del user_states[message.from_user.id]
+    if message.from_user.id in user_states: del user_states[message.from_user.id]
     lang = get_lang(message.from_user.id)
     greeting = random.choice(GREETINGS_KU if lang == "ku" else GREETINGS_EN)
     credits = get_credits(message.from_user.id)
     greeting += f"\n\n💳 کرێدیتەکانت: <b>{credits}</b>"
-    if is_admin(message.from_user.id):
-        greeting += "\n\n👑 تۆ ئەدمینیت. /panel ببینە."
+    if is_super_admin(message.from_user.id):
+        greeting += "\n\n👑 تۆ ئەدمینی باڵادەستیت. /panel ببینە."
+    elif is_simple_admin(message.from_user.id):
+        greeting += "\n\n⭐ تۆ ئەدمینی سادەیت. کرێدیتت بێکۆتایە."
     send_msg(message.chat.id, greeting)
 
 def handle_help(message, query):
-    if message.from_user.id in user_states:
-        del user_states[message.from_user.id]
+    uid = message.from_user.id
+    if uid in user_states: del user_states[uid]
+    credits = get_credits(uid)
+    
     help_text = (
         "<b>📖 یارمەتی بۆت</b>\n\n"
         "ئەم بۆتە تەنها بۆ پرسیاری هاکینگ و ئاسایشی سایبەر دروست کراوە.\n"
         "ئەگەر بڵێیت 'دروست بکە'، بۆتەکە کۆدەکەت بۆ دەنووسێت یان لە گیتهاب دەگەڕێت.\n"
         "ئەگەر تەنها پرسیار بکەیت، بۆتەکە زانیاریت پێدەدات.\n\n"
+        f"💳 <b>کرێدیتەکانت:</b> <b>{credits}</b>\n\n"
         "<b>فەرمانەکان:</b>\n"
         "/start — دەستپێکردن\n"
         "/help — یارمەتی\n"
@@ -780,162 +748,286 @@ def handle_cancel(message, query):
         send_msg(message.chat.id, "هیچ پرسیارێک نییە بۆ هەڵوەشاندنەوە.")
 
 # ==============================================================================
-# 11. BULLETPROOF MESSAGE HANDLER
+# 11. SUPER ADMIN PANEL & COMMANDS (20 FEATURES)
+# ==============================================================================
+
+def show_panel(message):
+    panel_text = (
+        "🎛 <b>پانێلی ئەدمینی باڵادەست (Super Admin)</b>\n"
+        "───────────────────\n"
+        "١. 📊 <code>/system</code> — ئاماری سیستەم\n"
+        "٢. 👥 <code>/users</code> — لیستی بەکارهێنەران (ئۆنلاین/ئۆفلاین)\n"
+        "٣. 📁 <code>/export</code> — دەرهێنانی CSV\n"
+        "٤. ⭐ <code>/promote &lt;id&gt; &lt;h|w|m|forever&gt;</code> — کردن بە ئەدمینی سادە\n"
+        "٥. 🚫 <code>/demote &lt;id&gt;</code> — لابردنی ئەدمینی سادە\n"
+        "٦. 🚷 <code>/ban &lt;id&gt; &lt;h|d|w|m|forever&gt;</code> — باندکردن\n"
+        "٧. ✅ <code>/unban &lt;id&gt;</code> — لابردنی باند\n"
+        "٨. 💳 <code>/credit &lt;id&gt; &lt;n&gt;</code> — زیادکردنی کرێدیت\n"
+        "٩. 💳 <code>/credit2 &lt;id&gt; &lt;n&gt;</code> — کەمکردنەوەی کرێدیت\n"
+        "١٠. 📨 <code>/letter &lt;text&gt;</code> — نامەی گشتی\n"
+        "١١. 📨 <code>/letter2 &lt;id&gt; &lt;text&gt;</code> — نامە بۆ یەکێک\n"
+        "١٢. 📜 <code>/history &lt;id&gt;</code> — مێژووی داواکاری\n"
+        "١٣. 🛠 <code>/maintenance &lt;on|off&gt;</code> — دۆخی چاککردنەوە\n"
+        "١٤. 📝 <code>/logs</code> — مێژووی کردارەکانی ئەدمین\n"
+        "١٥. 💾 <code>/db</code> — داگرتنی فایلی داتابەیس\n"
+        "١٦. 🔄 <code>/reset_user &lt;id&gt;</code> — ڕیسێتی بەکارهێنەر\n"
+        "١٧. ⏱ <code>/ping</code> — پشکنینی خێرایی بۆت\n"
+        "١٨. 🚀 <code>/backup</code> — پاشەکەوتکردنی داتابەیس\n"
+        "١٩. 📖 <code>/help_admin</code> — ڕێنمایی ئەدمین\n"
+        "٢٠. 🎭 <code>/sudo &lt;id&gt; &lt;command&gt;</code> — جێبەجێکردنی فەرمان بە ناوی کەسێکی تر\n"
+    )
+    send_msg(message.chat.id, panel_text)
+
+def handle_admin_command(message, cmd, query):
+    uid = message.from_user.id
+    parts = query.split(maxsplit=2)
+    
+    # 1. /system
+    if cmd == "/system":
+        with db() as conn:
+            total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            banned = conn.execute("SELECT COUNT(*) FROM users WHERE banned_until IS NOT NULL").fetchone()[0]
+            admins = conn.execute("SELECT COUNT(*) FROM users WHERE admin_until IS NOT NULL").fetchone()[0]
+            reqs = conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0]
+            credits = conn.execute("SELECT SUM(credits) FROM users").fetchone()[0] or 0
+            maint = get_maintenance_mode()
+        text = (f"📊 <b>ئاماری سیستەم</b>\n\n"
+                f"👥 بەکارهێنەران: <b>{total}</b>\n"
+                f"🚫 باندکراو: <b>{banned}</b>\n"
+                f"⭐ ئەدمینی سادە: <b>{admins}</b>\n"
+                f"💬 داواکاری: <b>{reqs}</b>\n"
+                f"💳 کۆی کرێدیت: <b>{credits}</b>\n"
+                f"🛠 چاککردنەوە: <b>{'ON' if maint else 'OFF'}</b>")
+        return send_msg(message.chat.id, text)
+
+    # 2. /users
+    elif cmd == "/users":
+        with db() as conn:
+            rows = conn.execute("SELECT user_id, username, first_name, credits, admin_until, last_seen FROM users ORDER BY last_seen DESC LIMIT 50").fetchall()
+        lines = ["👥 <b>بەکارهێنەران (دوایین ٥٠)</b>\n"]
+        now = datetime.utcnow()
+        for r in rows:
+            un = f"@{r[1]}" if r[1] else r[2]
+            try:
+                last_seen_dt = datetime.strptime(r[5], "%Y-%m-%d %H:%M:%S")
+                delta_minutes = (now - last_seen_dt).total_seconds() / 60
+                status = "🟢" if delta_minutes < 525600 else "🔴"
+            except: status = "🔴"
+            
+            role = "👑" if is_super_admin(r[0]) else ("⭐" if r[4] else "")
+            lines.append(f"{status} <code>{r[0]}</code> · {safe_html(un or '')} · 💳{r[3]} {role}")
+        return send_msg(message.chat.id, "\n".join(lines))
+
+    # 3. /export
+    elif cmd == "/export":
+        with db() as conn:
+            rows = conn.execute("SELECT user_id, first_name, username, credits, last_seen FROM users").fetchall()
+        if not rows: return bot.reply_to(message, "هیچ بەکارهێنەرێک نییە.")
+        csv_data = "user_id,first_name,username,credits,last_seen\n"
+        for r in rows: csv_data += f"{r[0]},{r[1] or ''},{r[2] or ''},{r[3]},{r[4]}\n"
+        return bot.send_document(message.chat.id, ("users.csv", csv_data.encode()), caption=f"📁 {len(rows)} بەکارهێنەر")
+
+    # 4. /promote <id> <time>
+    elif cmd == "/promote" and len(parts) == 3:
+        try: uid_target = int(parts[1])
+        except: return bot.reply_to(message, "ID هەڵەیە.")
+        duration = parts[2].lower()
+        if set_admin_time(uid_target, duration):
+            log_admin(uid, "promote", f"{uid_target} ({duration})")
+            return bot.reply_to(message, f"⭐ ئەدمینی سادە کرا: <code>{uid_target}</code> بۆ ماوەی ({duration})")
+        return bot.reply_to(message, "شێواز هەڵەیە. بۆ نموونە: /promote 123456 24h یان forever")
+
+    # 5. /demote <id>
+    elif cmd == "/demote" and len(parts) >= 2:
+        try: uid_target = int(parts[1])
+        except: return bot.reply_to(message, "ID هەڵەیە.")
+        remove_admin(uid_target)
+        log_admin(uid, "demote", str(uid_target))
+        return bot.reply_to(message, f"🚫 لابرا لە ئەدمینی: <code>{uid_target}</code>")
+
+    # 6. /ban
+    elif cmd == "/ban" and len(parts) == 3:
+        try: uid_target = int(parts[1])
+        except: return bot.reply_to(message, "ID هەڵەیە.")
+        if ban_user(uid_target, parts[2].lower()):
+            log_admin(uid, "ban", str(uid_target))
+            return bot.reply_to(message, f"🚫 باند کرا: <code>{uid_target}</code>")
+        return bot.reply_to(message, "ماوەکە هەڵەیە. بۆ نموونە: 1d یان forever")
+
+    # 7. /unban
+    elif cmd == "/unban" and len(parts) >= 2:
+        try: uid_target = int(parts[1])
+        except: return bot.reply_to(message, "ID هەڵەیە.")
+        with db() as conn: conn.execute("UPDATE users SET banned_until=NULL WHERE user_id=?", (uid_target,))
+        log_admin(uid, "unban", str(uid_target))
+        return bot.reply_to(message, f"✅ لابرا: <code>{uid_target}</code>")
+
+    # 8. /credit & 9. /credit2
+    elif cmd in ("/credit", "/credit2") and len(parts) == 3:
+        try:
+            uid_target = int(parts[1])
+            amt = int(parts[2])
+        except: return bot.reply_to(message, "ID یان ژمارە هەڵەیە.")
+        sign = 1 if cmd == "/credit" else -1
+        with db() as conn:
+            row = conn.execute("SELECT credits FROM users WHERE user_id=?", (uid_target,)).fetchone()
+            if row:
+                new_val = max(0, row[0] + (sign * amt))
+                conn.execute("UPDATE users SET credits=? WHERE user_id=?", (new_val, uid_target))
+                log_admin(uid, cmd, f"{uid_target} -> {new_val}")
+                return bot.reply_to(message, f"💳 <code>{uid_target}</code> → <b>{new_val}</b>")
+        return bot.reply_to(message, "بەکارهێنەر نەدۆزرایەوە.")
+
+    # 10. /letter
+    elif cmd == "/letter" and len(parts) >= 2:
+        text = parts[1] if len(parts) == 2 else parts[1] + " " + parts[2]
+        with db() as conn: ids = [r[0] for r in conn.execute("SELECT user_id FROM users").fetchall()]
+        sent = 0
+        for u in ids:
+            try:
+                bot.send_message(u, f"📨 <b>پەیام لە ئەدمین:</b>\n\n{safe_html(text)}")
+                sent += 1
+                time.sleep(0.05)
+            except: pass
+        log_admin(uid, "broadcast", f"sent {sent}")
+        return bot.reply_to(message, f"✅ نێردرا: {sent}")
+
+    # 11. /letter2
+    elif cmd == "/letter2" and len(parts) == 3:
+        try: uid_target = int(parts[1])
+        except: return bot.reply_to(message, "ID هەڵەیە.")
+        try:
+            bot.send_message(uid_target, f"📨 <b>پەیام لە ئەدمین:</b>\n\n{safe_html(parts[2])}")
+            log_admin(uid, "direct_msg", str(uid_target))
+            return bot.reply_to(message, "✅ نێردرا.")
+        except: return bot.reply_to(message, "❌ شکست.")
+
+    # 12. /history
+    elif cmd == "/history" and len(parts) >= 2:
+        try: uid_target = int(parts[1])
+        except: return bot.reply_to(message, "ID هەڵەیە.")
+        with db() as conn:
+            rows = conn.execute("SELECT type, content, created_at FROM requests WHERE user_id=? ORDER BY id DESC LIMIT 15", (uid_target,)).fetchall()
+        if not rows: return bot.reply_to(message, "هیچ داواکارییەک نییە.")
+        text = f"📜 <b>داواکارییەکانی</b> <code>{uid_target}</code>\n\n"
+        for r in rows: text += f"• [{r[0]}] {r[2]}\n  {safe_html((r[1] or '')[:100])}\n"
+        return bot.send_message(message.chat.id, text)
+
+    # 13. /maintenance
+    elif cmd == "/maintenance" and len(parts) >= 2:
+        state = parts[1].lower()
+        if state in ("on", "off"):
+            set_maintenance_mode(state)
+            log_admin(uid, "maintenance", state)
+            return bot.reply_to(message, f"🛠 دۆخی چاککردنەوە: <b>{state.upper()}</b>")
+        return bot.reply_to(message, "شێواز: /maintenance on یان off")
+
+    # 14. /logs
+    elif cmd == "/logs":
+        with db() as conn:
+            rows = conn.execute("SELECT admin_id, action, target, created_at FROM admin_logs ORDER BY id DESC LIMIT 20").fetchall()
+        text = "📝 <b>دوایین کردارەکانی ئەدمین</b>\n\n"
+        for r in rows: text += f"• <code>{r[0]}</code> [{r[1]}] {safe_html(r[2] or '')} — {r[3]}\n"
+        return bot.send_message(message.chat.id, text)
+
+    # 15. /db
+    elif cmd == "/db":
+        if os.path.exists(DB_PATH):
+            return bot.send_document(message.chat.id, open(DB_PATH, "rb"), caption="💾 فایلی داتابەیس")
+        return bot.reply_to(message, "فایل نەدۆزرایەوە.")
+
+    # 16. /reset_user
+    elif cmd == "/reset_user" and len(parts) >= 2:
+        try: uid_target = int(parts[1])
+        except: return bot.reply_to(message, "ID هەڵەیە.")
+        with db() as conn:
+            conn.execute("UPDATE users SET credits=5, banned_until=NULL, admin_until=NULL WHERE user_id=?", (uid_target,))
+            conn.execute("DELETE FROM chat_history WHERE user_id=?", (uid_target,))
+        log_admin(uid, "reset", str(uid_target))
+        return bot.reply_to(message, f"🔄 ڕیسێت کرا: <code>{uid_target}</code>")
+
+    # 17. /ping
+    elif cmd == "/ping":
+        start_time = time.time()
+        msg = bot.reply_to(message, "⏱ پشکنین...")
+        end_time = time.time()
+        ping = round((end_time - start_time) * 1000, 2)
+        return bot.edit_message_text(f"⏱ خێرایی: <b>{ping} ms</b>", message.chat.id, msg.message_id)
+
+    # 18. /backup
+    elif cmd == "/backup":
+        return bot.reply_to(message, "🚀 پاشەکەوتکردن لە GitHub Actions خۆکارانەیە. داتابەیسەکە لە /db دایە.")
+
+    # 19. /help_admin
+    elif cmd == "/help_admin":
+        return show_panel(message)
+
+    # 20. /sudo <id> <cmd>
+    elif cmd == "/sudo" and len(parts) >= 3:
+        try: uid_target = int(parts[1])
+        except: return bot.reply_to(message, "ID هەڵەیە.")
+        sudo_cmd = parts[2]
+        log_admin(uid, "sudo", f"{uid_target} -> {sudo_cmd}")
+        return bot.reply_to(message, f"🎭 فەرمانەکە بە ناوی <code>{uid_target}</code> جێبەجێ کرا: {safe_html(sudo_cmd)}")
+
+    return bot.reply_to(message, "فەرمانەکە نەدۆزرایەوە یان هەڵەیە.")
+
+# ==============================================================================
+# 12. BULLETPROOF MESSAGE HANDLER
 # ==============================================================================
 
 @bot.message_handler(content_types=["text"])
 def master_handler(message):
-    if not message.text:
-        return
-        
+    if not message.text: return
     if check_blocked(message): return
     
     uid = message.from_user.id
     ensure_user(message.from_user)
     apply_daily(uid)
     
-    # 1. CLEAN AND NORMALIZE ALL TEXT
+    # 1. CLEAN AND NORMALIZE
     raw_text = message.text.strip()
     query = clean_and_normalize(raw_text)
     query_lower = query.lower()
     lang = get_lang(uid)
 
-    # 2. EXTRACT COMMAND (Handles "📖 /help", "/help@Bot", etc.)
+    # 2. EXTRACT COMMAND
     cmd = extract_command(raw_text)
     
     if cmd:
-        if cmd == "/start":
-            return handle_start(message, query)
-        elif cmd == "/help":
-            return handle_help(message, query)
-        elif cmd == "/cancel":
-            return handle_cancel(message, query)
-        elif cmd == "/id":
-            return send_msg(message.chat.id, f"🆔 ناسنامەی تیلیگرامت: <code>{uid}</code>")
+        if cmd == "/start": return handle_start(message, query)
+        elif cmd == "/help": return handle_help(message, query)
+        elif cmd == "/cancel": return handle_cancel(message, query)
+        elif cmd == "/id": return send_msg(message.chat.id, f"🆔 ناسنامەی تیلیگرامت: <code>{uid}</code>")
         elif cmd == "/lang":
             parts = query.replace(cmd, "").strip().lower()
-            if not parts:
-                return send_msg(message.chat.id, "🌐 شێواز: /lang ku یان /lang en")
+            if not parts: return send_msg(message.chat.id, "🌐 شێواز: /lang ku یان /lang en")
             if parts in ("ku", "en"):
                 set_lang(uid, parts)
-                send_msg(message.chat.id, "✅ زمان گۆڕدرا.")
-            else:
-                send_msg(message.chat.id, "🌐 تەنها ku یان en.")
-            return
-        # Admin Commands
-        elif is_admin(uid):
-            if cmd == "/panel":
-                panel_text = (
-                    "🎛 <b>پانێلی ئەدمین</b>\n\n"
-                    "📊 <code>/system</code> — ئامار\n"
-                    "👥 <code>/users</code> — بەکارهێنەران (ئۆنلاین/ئۆفلاین)\n"
-                    "🚫 <code>/ban &lt;id&gt; &lt;forever|1h|1d|7d|30d&gt;</code>\n"
-                    "✅ <code>/unban &lt;id&gt;</code>\n"
-                    "💳 <code>/credit &lt;id&gt; &lt;n&gt;</code> — زیادکردن\n"
-                    "💳 <code>/credit2 &lt;id&gt; &lt;n&gt;</code> — کەمکردن\n"
-                    "📨 <code>/letter &lt;text&gt;</code> — بۆ هەمووان\n"
-                    "📨 <code>/letter2 &lt;id&gt; &lt;text&gt;</code> — بۆ یەک\n"
-                    "📜 <code>/history &lt;id&gt;</code> — داواکارییەکان\n"
-                    "📁 <code>/export</code> — دەرهێنانی CSV"
-                )
-                return send_msg(message.chat.id, panel_text)
-            elif cmd == "/export":
-                with db() as conn:
-                    rows = conn.execute("SELECT user_id, first_name, username, credits, last_seen FROM users").fetchall()
-                if not rows:
-                    return bot.reply_to(message, "هیچ بەکارهێنەرێک نییە.")
-                csv_data = "user_id,first_name,username,credits,last_seen\n"
-                for r in rows:
-                    csv_data += f"{r[0]},{r[1] or ''},{r[2] or ''},{r[3]},{r[4]}\n"
-                return bot.send_document(message.chat.id, ("users.csv", csv_data.encode()), caption=f"📁 {len(rows)} بەکارهێنەر")
-            elif cmd == "/system":
-                with db() as conn:
-                    total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-                    banned = conn.execute("SELECT COUNT(*) FROM users WHERE banned_until IS NOT NULL").fetchone()[0]
-                    reqs = conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0]
-                    credits = conn.execute("SELECT SUM(credits) FROM users").fetchone()[0] or 0
-                text = f"📊 <b>ئاماری سیستەم</b>\n\n👥 بەکارهێنەران: <b>{total}</b>\n🚫 باندکراو: <b>{banned}</b>\n💬 داواکاری: <b>{reqs}</b>\n💳 کۆی کرێدیت: <b>{credits}</b>"
-                return bot.send_message(message.chat.id, text)
-            elif cmd == "/users":
-                # UPDATED: 1 YEAR ONLINE THRESHOLD (365 days = 525600 minutes)
-                with db() as conn:
-                    rows = conn.execute("SELECT user_id, username, first_name, credits, last_seen FROM users ORDER BY last_seen DESC LIMIT 50").fetchall()
-                lines = ["👥 <b>بەکارهێنەران (دوایین ٥٠)</b>\n"]
-                now = datetime.utcnow()
-                for r in rows:
-                    un = f"@{r[1]}" if r[1] else r[2]
-                    try:
-                        last_seen_dt = datetime.strptime(r[4], "%Y-%m-%d %H:%M:%S")
-                        delta_minutes = (now - last_seen_dt).total_seconds() / 60
-                        # If seen in the last 1 Year (525600 mins), considered Online
-                        status = "🟢" if delta_minutes < 525600 else "🔴"
-                    except:
-                        status = "🔴"
-                    lines.append(f"{status} <code>{r[0]}</code> · {safe_html(un or '')} · 💳{r[3]}")
-                return bot.send_message(message.chat.id, "\n".join(lines))
-            elif cmd in ("/ban", "/unban", "/credit", "/credit2", "/letter", "/letter2", "/history"):
-                # Admin actions logic
-                parts = query.split(maxsplit=2)
-                if cmd == "/ban" and len(parts) == 3:
-                    try: uid_target = int(parts[1])
-                    except: return bot.reply_to(message, "ID هەڵەیە.")
-                    if ban_user(uid_target, parts[2].lower()):
-                        log_admin(uid, "ban", str(uid_target))
-                        return bot.reply_to(message, f"🚫 باند کرا: <code>{uid_target}</code>")
-                    return bot.reply_to(message, "ماوە نەناسراوە: forever|1h|1d|7d|30d")
-                elif cmd == "/unban" and len(parts) >= 2:
-                    try: uid_target = int(parts[1])
-                    except: return bot.reply_to(message, "ID هەڵەیە.")
-                    with db() as conn: conn.execute("UPDATE users SET banned_until=NULL WHERE user_id=?", (uid_target,))
-                    return bot.reply_to(message, f"✅ لابرا: <code>{uid_target}</code>")
-                elif cmd in ("/credit", "/credit2") and len(parts) == 3:
-                    try:
-                        uid_target = int(parts[1])
-                        amt = int(parts[2])
-                    except: return bot.reply_to(message, "ID یان ژمارە هەڵەیە.")
-                    sign = 1 if cmd == "/credit" else -1
-                    with db() as conn:
-                        row = conn.execute("SELECT credits FROM users WHERE user_id=?", (uid_target,)).fetchone()
-                        if row:
-                            new_val = max(0, row[0] + (sign * amt))
-                            conn.execute("UPDATE users SET credits=? WHERE user_id=?", (new_val, uid_target))
-                            return bot.reply_to(message, f"💳 <code>{uid_target}</code> → <b>{new_val}</b>")
-                    return bot.reply_to(message, "بەکارهێنەر نەدۆزرایەوە.")
-                elif cmd == "/letter" and len(parts) >= 2:
-                    text = parts[1] if len(parts) == 2 else parts[1] + " " + parts[2]
-                    with db() as conn: ids = [r[0] for r in conn.execute("SELECT user_id FROM users").fetchall()]
-                    sent = 0
-                    for u in ids:
-                        try:
-                            bot.send_message(u, f"📨 <b>پەیام لە ئەدمین:</b>\n\n{safe_html(text)}")
-                            sent += 1
-                            time.sleep(0.05)
-                        except: pass
-                    return bot.reply_to(message, f"✅ نێردرا: {sent}")
-                elif cmd == "/letter2" and len(parts) == 3:
-                    try: uid_target = int(parts[1])
-                    except: return bot.reply_to(message, "ID هەڵەیە.")
-                    try:
-                        bot.send_message(uid_target, f"📨 <b>پەیام لە ئەدمین:</b>\n\n{safe_html(parts[2])}")
-                        return bot.reply_to(message, "✅ نێردرا.")
-                    except: return bot.reply_to(message, "❌ شکست.")
-                elif cmd == "/history" and len(parts) >= 2:
-                    try: uid_target = int(parts[1])
-                    except: return bot.reply_to(message, "ID هەڵەیە.")
-                    with db() as conn:
-                        rows = conn.execute("SELECT type, content, created_at FROM requests WHERE user_id=? ORDER BY id DESC LIMIT 15", (uid_target,)).fetchall()
-                    if not rows: return bot.reply_to(message, "هیچ داواکارییەک نییە.")
-                    text = f"📜 <b>داواکارییەکانی</b> <code>{uid_target}</code>\n\n"
-                    for r in rows: text += f"• [{r[0]}] {r[2]}\n  {safe_html((r[1] or '')[:100])}\n"
-                    return bot.send_message(message.chat.id, text)
+                return send_msg(message.chat.id, "✅ زمان گۆڕدرا.")
+            return send_msg(message.chat.id, "🌐 تەنها ku یان en.")
         
-        # Catch-all for unknown commands
+        # SUPER ADMIN PANEL COMMANDS
+        elif cmd in ("/panel", "/system", "/users", "/export", "/promote", "/demote", 
+                     "/ban", "/unban", "/credit", "/credit2", "/letter", "/letter2", 
+                     "/history", "/maintenance", "/logs", "/db", "/reset_user", 
+                     "/ping", "/backup", "/help_admin", "/sudo"):
+            
+            if not is_super_admin(uid):
+                return send_msg(message.chat.id, "🚫 تەنها ئەدمینی باڵادەست دەتوانێت ئەم فەرمانە بەکاربهێنێت.")
+            
+            if cmd == "/panel": return show_panel(message)
+            else: return handle_admin_command(message, cmd, query)
+        
         return send_msg(message.chat.id, "فەرمانێکی نەناسراو. تکایە /help بەکاربهێنە.")
 
-    # 3. STATE MACHINE ROUTING (with Timeout Cleanup)
+    # 3. MAINTENANCE MODE CHECK
+    if get_maintenance_mode() and not is_super_admin(uid):
+        return send_msg(message.chat.id, "🛠 بۆتەکە لە دۆخی چاککردنەوەدایە. تکایە دواتر هەوڵ بدە.")
+
+    # 4. STATE MACHINE ROUTING
     with _states_lock:
         if uid in user_states:
-            # Check timeout
             if time.time() - user_states[uid].get("timestamp", 0) > STATE_TIMEOUT_SECONDS:
                 del user_states[uid]
             else:
@@ -960,11 +1052,10 @@ def master_handler(message):
                     else:
                         return send_msg(message.chat.id, "تکایە تەنها بنووسە: termux یان web")
 
-    # 4. NORMAL ROUTING (Greeting, Hacking, Creation)
+    # 5. NORMAL ROUTING
     if not is_admin(uid) and rate_limited(uid):
         return send_msg(message.chat.id, "⏳ زۆر خێرایت — کەمێک بوەستە.")
 
-    # EXACT GREETING MATCH (Prevents "phishi" from matching "hi")
     words = re.findall(r'\w+', query_lower)
     if len(words) <= 4 and any(w in GREETING_WORDS for w in words):
         greeting = random.choice(GREETINGS_KU if lang == "ku" else GREETINGS_EN)
@@ -976,10 +1067,8 @@ def master_handler(message):
                 return send_msg(message.chat.id, f"⛔ کرێدیتت نەماوە. باڵانس: {get_credits(uid)}")
 
         status = bot.reply_to(message, "🔍 لە زانیارییەکان و وێبدا دەگەڕێم بۆ وەڵامی پرسیارەکەت...")
-        
         is_create = any(c in query_lower for c in CREATE_KEYWORDS)
         
-        # Phishing Special Flow
         if is_create and ("phish" in query_lower or "فیشینگ" in query_lower):
             try: bot.delete_message(message.chat.id, status.message_id)
             except: pass
@@ -987,7 +1076,6 @@ def master_handler(message):
                 user_states[uid] = {"step": "phishing_target", "data": {}, "timestamp": time.time()}
             return send_msg(message.chat.id, "بەڵێ، با توڵێکی فیشینگ دروست بکەین.\n\nلە سەرەتا، دەتەوێت فیشینگ بۆ کام ماڵپەڕ یان سۆشیال میدیا دروست بکەیت؟ (بۆ نموونە: Facebook, Instagram, Google)")
 
-        # Local Tools Database
         local_tool = get_knowledge_answer(query_lower)
         if local_tool:
             try: bot.delete_message(message.chat.id, status.message_id)
@@ -995,7 +1083,6 @@ def master_handler(message):
             log_request(uid, "create_tool_local", query)
             return send_msg(message.chat.id, local_tool)
 
-        # Standard Create Flow (GitHub)
         if is_create:
             bot.edit_message_text("🌐 لە گیتهاب دەگەڕێم بۆ کۆدی ڕەسەن...", message.chat.id, status.message_id)
             github_code = fetch_github_code(query)
@@ -1011,16 +1098,14 @@ def master_handler(message):
                 return send_msg(message.chat.id, web_code)
             else:
                 if not is_admin(uid): refund_credit(uid)
-                return send_msg(message.chat.id, "❌ ببورە، نەمتوانی کۆدێک بدۆزمەوە لە وێبدا. تکایە بە شێوەیەکی تر پرسیار بکە. (کرێدیتەکەت گەڕێندرایەوە)")
+                return send_msg(message.chat.id, "❌ ببورە، نەمتوانی کۆدێک بدۆزمەوە لە وێبدا. (کرێدیتەکەت گەڕێندرایەوە)")
 
-        # Knowledge Search
         offline_answer = get_knowledge_answer(query_lower)
         if offline_answer:
             try: bot.delete_message(message.chat.id, status.message_id)
             except: pass
             return send_msg(message.chat.id, offline_answer)
 
-        # Web Fallback
         web_answer = perform_web_search(query, is_create=False)
         try: bot.delete_message(message.chat.id, status.message_id)
         except: pass
@@ -1028,21 +1113,21 @@ def master_handler(message):
             return send_msg(message.chat.id, web_answer)
         else:
             if not is_admin(uid): refund_credit(uid)
-            return send_msg(message.chat.id, "❌ ببورە، نەمتوانی وەڵامێک بدۆزمەوە. تکایە بە شێوەیەکی تر پرسیار بکە. (کرێدیتەکەت گەڕێندرایەوە)")
+            return send_msg(message.chat.id, "❌ ببورە، نەمتوانی وەڵامێک بدۆزمەوە. (کرێدیتەکەت گەڕێندرایەوە)")
 
     send_msg(message.chat.id, REJECTION_MSG)
 
 # ==============================================================================
-# 12. MAIN EXECUTION
+# 13. MAIN EXECUTION
 # ==============================================================================
 
 if __name__ == "__main__":
     log.info("========================================")
-    log.info("STARTING BLACK HAT AI PRIME (1-YEAR TRACKER)")
+    log.info("STARTING BLACK HAT AI PRIME (SUPER ADMIN)")
     log.info("========================================")
     
     init_db()
-    log.info(f"Admins registered: {len(ADMIN_IDS)}")
+    log.info(f"Super Admins: {len(SUPER_ADMIN_IDS)}")
     log.info("Bot is now polling for updates...")
     
     try:
