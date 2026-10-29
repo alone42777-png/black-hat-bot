@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-BLACK HAT AI PRIME — THE ULTIMATE SUPER ADMIN BULLETPROOF SYSTEM
+BLACK HAT AI PRIME — THE ABSOLUTE 100,000,000,000x FORTRESS (ULTIMATE CODE)
 ================================================================================
 This file is the absolute maximum capacity single-file architecture.
 It includes a massive local database of 100+ hacking tools, robust state
@@ -10,17 +10,23 @@ management for phishing, and complete Telegram bot logic.
 
 Features:
 1. Complete Telegram Bot setup.
-2. Advanced SQLite database.
+2. Advanced SQLite database with WAL mode and parameterized queries.
 3. 100+ distinct greetings.
 4. MASSIVE local database of 100+ Termux tools with EXACT WORD MATCHING.
 5. DYNAMIC STATE MACHINE for Phishing Tool generation.
 6. RAW GITHUB CODE EXTRACTOR for fallback.
 7. ULTRA-DETAILED Termux/Nano instructions appended to every tool.
-8. Complete Admin Panel with 20 features.
+8. Complete Admin Panel with 22 features.
 9. DUAL-LEVEL ADMIN SYSTEM (Super & Simple).
 10. SMART BAN: Defaults to forever if no time is specified.
-11. GHOST BAN: Can ban users who haven't started the bot yet.
-12. 1-YEAR ONLINE TRACKING.
+11. BAN NOTIFICATION: Sends a pinned message to the banned user instantly.
+12. PINNED BROADCAST (/letter3): Sends a message to everyone and pins it.
+13. UNPIN ALL (/letter4): Removes all pinned messages from every chat.
+14. WAF (Web Application Firewall): Strips SQLi and XSS payloads from input.
+15. ANTI-FLOOD: Prevents spamming and rapid command abuse.
+16. RBAC (Role-Based Access Control): Strict checks for Super Admin, Simple
+    Admin, and Members.
+17. GHOST BANS: Can ban users who haven't even started the bot yet.
 ================================================================================
 """
 
@@ -72,6 +78,7 @@ RATE_LIMIT_PER_MINUTE = 30
 HISTORY_LIMIT = 12
 MAX_HISTORY_ROWS = 100
 STATE_TIMEOUT_SECONDS = 900  # 15 minutes
+ANTI_FLOOD_SECONDS = 3       # Minimum seconds between consecutive messages
 
 if not BOT_TOKEN:
     sys.stderr.write("FATAL ERROR: Missing TELEGRAM_BOT_TOKEN environment variable.\n")
@@ -93,6 +100,8 @@ log = logging.getLogger("BlackHatPrime")
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 _recent_requests = {}
 _recent_lock = threading.Lock()
+_flood_tracker = {}
+_flood_lock = threading.Lock()
 
 user_states = {}
 _states_lock = threading.Lock()
@@ -307,9 +316,25 @@ REJECTION_MSG = (
 # ==============================================================================
 
 def clean_and_normalize(text):
+    """Removes invisible chars and normalizes Kurdish vs Arabic letters."""
     if not text: return ""
     text = re.sub(r'[\u200b-\u200f\u202a-\u202e\u2060-\u206f]', '', text)
     text = text.replace('ك', 'ک').replace('ي', 'ی').replace('ه', 'ە')
+    return text.strip()
+
+def sanitize_input(text):
+    """WAF: Strips out potential SQLi and XSS payloads."""
+    if not text: return ""
+    # Remove HTML tags (XSS prevention)
+    text = re.sub(r'<[^>]*>', '', text)
+    # Remove common SQLi patterns
+    sqli_patterns = [
+        r'(?i)\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE)\b',
+        r'(--|#|/\*)',
+        r'(\bOR\b|\bAND\b)\s+[\'\"]?\d+[\'\"]?\s*=\s*[\'\"]?\d+'
+    ]
+    for pattern in sqli_patterns:
+        text = re.sub(pattern, '', text)
     return text.strip()
 
 def extract_command(text):
@@ -473,7 +498,6 @@ def set_admin_time(user_id, duration_str):
         val = (now + timedelta(days=amt * m[unit])).isoformat()
     
     with db() as conn:
-        # Ensure user exists first to prevent silent update failures
         conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
         conn.execute("UPDATE users SET admin_until=? WHERE user_id=?", (val, user_id))
     return True
@@ -570,7 +594,6 @@ def ban_user(user_id, duration):
         val = (datetime.utcnow() + timedelta(days=amt * m[unit])).isoformat()
         
     with db() as conn:
-        # Ensure user exists first to prevent silent update failures
         conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
         conn.execute("UPDATE users SET banned_until=? WHERE user_id=?", (val, user_id))
     return True
@@ -605,6 +628,17 @@ def rate_limited(user_id):
         bucket[:] = [t for t in bucket if now - t < 60]
         if len(bucket) >= RATE_LIMIT_PER_MINUTE: return True
         bucket.append(now)
+    return False
+
+def is_flooding(user_id):
+    if is_admin(user_id): return False
+    now = time.time()
+    with _flood_lock:
+        if len(_flood_tracker) > 10000: _flood_tracker.clear()
+        last_time = _flood_tracker.get(user_id, 0)
+        _flood_tracker[user_id] = now
+        if now - last_time < ANTI_FLOOD_SECONDS:
+            return True
     return False
 
 def check_blocked(message):
@@ -757,7 +791,7 @@ def handle_cancel(message, query):
         send_msg(message.chat.id, "هیچ پرسیارێک نییە بۆ هەڵوەشاندنەوە.")
 
 # ==============================================================================
-# 11. SUPER ADMIN PANEL & COMMANDS (20 FEATURES)
+# 11. SUPER ADMIN PANEL & COMMANDS (22 FEATURES)
 # ==============================================================================
 
 def show_panel(message):
@@ -775,15 +809,17 @@ def show_panel(message):
         "٩. 💳 <code>/credit2 &lt;id&gt; &lt;n&gt;</code> — کەمکردنەوەی کرێدیت\n"
         "١٠. 📨 <code>/letter &lt;text&gt;</code> — نامەی گشتی\n"
         "١١. 📨 <code>/letter2 &lt;id&gt; &lt;text&gt;</code> — نامە بۆ یەکێک\n"
-        "١٢. 📜 <code>/history &lt;id&gt;</code> — مێژووی داواکاری\n"
-        "١٣. 🛠 <code>/maintenance &lt;on|off&gt;</code> — دۆخی چاککردنەوە\n"
-        "١٤. 📝 <code>/logs</code> — مێژووی کردارەکانی ئەدمین\n"
-        "١٥. 💾 <code>/db</code> — داگرتنی فایلی داتابەیس\n"
-        "١٦. 🔄 <code>/reset_user &lt;id&gt;</code> — ڕیسێتی بەکارهێنەر\n"
-        "١٧. ⏱ <code>/ping</code> — پشکنینی خێرایی بۆت\n"
-        "١٨. 🚀 <code>/backup</code> — پاشەکەوتکردنی داتابەیس\n"
-        "١٩. 📖 <code>/help_admin</code> — ڕێنمایی ئەدمین\n"
-        "٢٠. 🎭 <code>/sudo &lt;id&gt; &lt;command&gt;</code> — جێبەجێکردنی فەرمان بە ناوی کەسێکی تر\n"
+        "١٢. 📌 <code>/letter3 &lt;text&gt;</code> — نامەی گشتی پینکراو\n"
+        "١٣. 📌 <code>/letter4</code> — لابردنی هەموو پینەکان\n"
+        "١٤. 📜 <code>/history &lt;id&gt;</code> — مێژووی داواکاری\n"
+        "١٥. 🛠 <code>/maintenance &lt;on|off&gt;</code> — دۆخی چاککردنەوە\n"
+        "١٦. 📝 <code>/logs</code> — مێژووی کردارەکانی ئەدمین\n"
+        "١٧. 💾 <code>/db</code> — داگرتنی فایلی داتابەیس\n"
+        "١٨. 🔄 <code>/reset_user &lt;id&gt;</code> — ڕیسێتی بەکارهێنەر\n"
+        "١٩. ⏱ <code>/ping</code> — پشکنینی خێرایی بۆت\n"
+        "٢٠. 🚀 <code>/backup</code> — پاشەکەوتکردنی داتابەیس\n"
+        "٢١. 📖 <code>/help_admin</code> — ڕێنمایی ئەدمین\n"
+        "٢٢. 🎭 <code>/sudo &lt;id&gt; &lt;command&gt;</code> — جێبەجێکردنی فەرمان بە ناوی کەسێکی تر\n"
     )
     send_msg(message.chat.id, panel_text)
 
@@ -842,7 +878,6 @@ def handle_admin_command(message, cmd, query):
             try: target = int(parts[1])
             except: return bot.reply_to(message, "ID هەڵەیە.")
             
-            # Default to forever if no time provided
             duration = parts[2].lower() if len(parts) >= 3 else "forever"
             
             if set_admin_time(target, duration):
@@ -867,11 +902,27 @@ def handle_admin_command(message, cmd, query):
             try: target = int(parts[1])
             except: return bot.reply_to(message, "ID هەڵەیە.")
             
-            # Default to forever if no time provided
             duration = parts[2].lower() if len(parts) >= 3 else "forever"
             
             if ban_user(target, duration):
                 log_admin(uid, "ban", str(target))
+                
+                # SEND AND PIN NOTIFICATION TO BANNED USER
+                try:
+                    notif_text = (
+                        "🚫 <b>تۆ لەلایەن ئەدمین باند کراویت!</b>\n\n"
+                        f"⏰ <b>ماوەی باند:</b> {duration}\n\n"
+                        "🔓 بۆ لابردنی باند، تکایە پەیوەندی بکە بە:\n"
+                        "@ALONE427"
+                    )
+                    sent_msg = bot.send_message(target, notif_text)
+                    try:
+                        bot.pin_chat_message(target, sent_msg.message_id, disable_notification=True)
+                    except Exception as pin_err:
+                        log.warning(f"Could not pin message for {target}: {pin_err}")
+                except Exception as e:
+                    log.warning(f"Could not notify banned user {target} (maybe blocked bot): {e}")
+                
                 return bot.reply_to(message, f"🚫 باند کرا: <code>{target}</code> بۆ ({duration})")
             return bot.reply_to(message, "ماوەکە هەڵەیە. بۆ نموونە: 1d یان forever")
         return bot.reply_to(message, "شێواز: /ban <id> <time>")
@@ -936,7 +987,43 @@ def handle_admin_command(message, cmd, query):
             except: return bot.reply_to(message, "❌ شکست.")
         return bot.reply_to(message, "شێواز: /letter2 <id> <text>")
 
-    # 12. /history
+    # 12. /letter3 (Broadcast + Pin)
+    elif cmd == "/letter3":
+        if len(parts) >= 2:
+            text = " ".join(parts[1:])
+            with db() as conn: ids = [r[0] for r in conn.execute("SELECT user_id FROM users").fetchall()]
+            sent = 0
+            pinned = 0
+            for u in ids:
+                try:
+                    msg = bot.send_message(u, f"📌 <b>پەیامی پینکراو لە ئەدمین:</b>\n\n{safe_html(text)}")
+                    sent += 1
+                    try:
+                        bot.pin_chat_message(u, msg.message_id, disable_notification=False)
+                        pinned += 1
+                    except Exception as pin_err:
+                        log.warning(f"Could not pin for {u}: {pin_err}")
+                    time.sleep(0.05)
+                except: pass
+            log_admin(uid, "broadcast_pin", f"sent {sent}, pinned {pinned}")
+            return bot.reply_to(message, f"✅ نێردرا: {sent} · پین کرا: {pinned}")
+        return bot.reply_to(message, "شێواز: /letter3 <text>")
+
+    # 13. /letter4 (Unpin All)
+    elif cmd == "/letter4":
+        with db() as conn: ids = [r[0] for r in conn.execute("SELECT user_id FROM users").fetchall()]
+        success = 0
+        failed = 0
+        for u in ids:
+            try:
+                bot.unpin_all_chat_messages(u)
+                success += 1
+                time.sleep(0.05)
+            except: failed += 1
+        log_admin(uid, "unpin_all", f"success {success}, failed {failed}")
+        return bot.reply_to(message, f"✅ پینەکان لابردران لە: {success} · شکست: {failed}")
+
+    # 14. /history
     elif cmd == "/history":
         if len(parts) >= 2:
             try: target = int(parts[1])
@@ -949,7 +1036,7 @@ def handle_admin_command(message, cmd, query):
             return bot.send_message(message.chat.id, text)
         return bot.reply_to(message, "شێواز: /history <id>")
 
-    # 13. /maintenance
+    # 15. /maintenance
     elif cmd == "/maintenance":
         if len(parts) >= 2:
             state = parts[1].lower()
@@ -960,7 +1047,7 @@ def handle_admin_command(message, cmd, query):
             return bot.reply_to(message, "شێواز: /maintenance on یان off")
         return bot.reply_to(message, "شێواز: /maintenance <on|off>")
 
-    # 14. /logs
+    # 16. /logs
     elif cmd == "/logs":
         with db() as conn:
             rows = conn.execute("SELECT admin_id, action, target, created_at FROM admin_logs ORDER BY id DESC LIMIT 20").fetchall()
@@ -968,13 +1055,13 @@ def handle_admin_command(message, cmd, query):
         for r in rows: text += f"• <code>{r[0]}</code> [{r[1]}] {safe_html(r[2] or '')} — {r[3]}\n"
         return bot.send_message(message.chat.id, text)
 
-    # 15. /db
+    # 17. /db
     elif cmd == "/db":
         if os.path.exists(DB_PATH):
             return bot.send_document(message.chat.id, open(DB_PATH, "rb"), caption="💾 فایلی داتابەیس")
         return bot.reply_to(message, "فایل نەدۆزرایەوە.")
 
-    # 16. /reset_user
+    # 18. /reset_user
     elif cmd == "/reset_user":
         if len(parts) >= 2:
             try: target = int(parts[1])
@@ -987,7 +1074,7 @@ def handle_admin_command(message, cmd, query):
             return bot.reply_to(message, f"🔄 ڕیسێت کرا: <code>{target}</code>")
         return bot.reply_to(message, "شێواز: /reset_user <id>")
 
-    # 17. /ping
+    # 19. /ping
     elif cmd == "/ping":
         start_time = time.time()
         msg = bot.reply_to(message, "⏱ پشکنین...")
@@ -995,15 +1082,15 @@ def handle_admin_command(message, cmd, query):
         ping = round((end_time - start_time) * 1000, 2)
         return bot.edit_message_text(f"⏱ خێرایی: <b>{ping} ms</b>", message.chat.id, msg.message_id)
 
-    # 18. /backup
+    # 20. /backup
     elif cmd == "/backup":
         return bot.reply_to(message, "🚀 پاشەکەوتکردن لە GitHub Actions خۆکارانەیە. داتابەیسەکە لە /db دایە.")
 
-    # 19. /help_admin
+    # 21. /help_admin
     elif cmd == "/help_admin":
         return show_panel(message)
 
-    # 20. /sudo <id> <cmd>
+    # 22. /sudo <id> <cmd>
     elif cmd == "/sudo":
         if len(parts) >= 3:
             try: target = int(parts[1])
@@ -1028,9 +1115,13 @@ def master_handler(message):
     ensure_user(message.from_user)
     apply_daily(uid)
     
-    # 1. CLEAN AND NORMALIZE
+    # ANTI-FLOOD CHECK
+    if is_flooding(uid):
+        return # Silently ignore rapid spamming
+
+    # 1. CLEAN AND SANITIZE
     raw_text = message.text.strip()
-    query = clean_and_normalize(raw_text)
+    query = sanitize_input(clean_and_normalize(raw_text))
     query_lower = query.lower()
     lang = get_lang(uid)
 
@@ -1053,8 +1144,8 @@ def master_handler(message):
         # SUPER ADMIN PANEL COMMANDS
         elif cmd in ("/panel", "/system", "/users", "/export", "/promote", "/demote", 
                      "/ban", "/unban", "/credit", "/credit2", "/letter", "/letter2", 
-                     "/history", "/maintenance", "/logs", "/db", "/reset_user", 
-                     "/ping", "/backup", "/help_admin", "/sudo"):
+                     "/letter3", "/letter4", "/history", "/maintenance", "/logs", 
+                     "/db", "/reset_user", "/ping", "/backup", "/help_admin", "/sudo"):
             
             if not is_super_admin(uid):
                 return send_msg(message.chat.id, "🚫 تەنها ئەدمینی باڵادەست دەتوانێت ئەم فەرمانە بەکاربهێنێت.")
@@ -1166,7 +1257,7 @@ def master_handler(message):
 
 if __name__ == "__main__":
     log.info("========================================")
-    log.info("STARTING BLACK HAT AI PRIME (SUPER ADMIN)")
+    log.info("STARTING BLACK HAT AI PRIME (100Bx FORTRESS)")
     log.info("========================================")
     
     init_db()
