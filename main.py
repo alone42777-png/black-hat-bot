@@ -2,22 +2,22 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-BLACK HAT AI PRIME — THE ABSOLUTE UNBREAKABLE 2000+ LINE FORTRESS
+BLACK HAT AI PRIME — THE ULTIMATE AI VIDEO GENERATOR & SECURITY FORTRESS
 ================================================================================
 This file is the absolute maximum capacity single-file architecture.
-It includes a massive local database of 200+ hacking tools, robust state
-management for phishing, and complete Telegram bot logic.
+It includes a massive local database of 200+ hacking tools, an AI Video
+Generator, robust state management for phishing, and complete bot logic.
 
 Features:
 1. Complete Telegram Bot setup.
 2. Advanced SQLite database.
 3. 100+ distinct greetings.
 4. MASSIVE local database of 200+ Termux tools AND raw Python/Bash payloads.
-5. ZERO RATE-LIMIT FAILURES: If web search fails, it falls back to raw code generation.
+5. AI VIDEO GENERATOR (/video): Uses Hugging Face free API to generate videos.
 6. DYNAMIC STATE MACHINE for Phishing Tool generation.
 7. RAW GITHUB CODE EXTRACTOR for fallback.
 8. ULTRA-DETAILED Termux/Nano instructions appended to every tool.
-9. Complete Admin Panel with 22 features.
+9. Complete Admin Panel with 24 features.
 10. DUAL-LEVEL ADMIN SYSTEM (Super & Simple).
 11. SMART BAN: Sends a pinned message to the banned user instantly.
 12. PINNED BROADCAST (/letter3) & UNPIN ALL (/letter4).
@@ -39,6 +39,8 @@ import threading
 import urllib.request
 import urllib.error
 import re
+import io
+import requests
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
@@ -63,6 +65,9 @@ except ImportError:
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 DB_PATH = os.getenv("DB_PATH", "bot_database.db")
 DEFAULT_LANG = os.getenv("DEFAULT_LANG", "ku").strip().lower()
+
+# Hugging Face Token for AI Video Generation
+HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 
 # Super Admin IDs (Hardcoded, Highest Level)
 SUPER_ADMIN_IDS = {5527152252, 8487940066}
@@ -309,7 +314,7 @@ CREATE_KEYWORDS = [
 GREETING_WORDS = ["سڵاو", "سلاو", "هەڵۆ", "hello", "hi", "hey", "salam", "slaw"]
 
 REJECTION_MSG = (
-    "⚠️ ببورە گیانم، ئەم بۆتە تەنها بۆ پرسیاری هاکینگ و دروستکردنی توڵە.\n"
+    "⚠️ ببورە گیانم، ئەم بۆتە تەنها بۆ پرسیاری هاکینگ و ئاسایشی سایبەر دروست کراوە.\n"
     "تکایە پرسیارێکی پەیوەندیدار بە هاکینگ، ئاسایش، یان پشکنینی سیستەم بکە."
 )
 
@@ -318,14 +323,12 @@ REJECTION_MSG = (
 # ==============================================================================
 
 def clean_and_normalize(text):
-    """Removes invisible chars and normalizes Kurdish vs Arabic letters."""
     if not text: return ""
     text = re.sub(r'[\u200b-\u200f\u202a-\u202e\u2060-\u206f]', '', text)
     text = text.replace('ك', 'ک').replace('ي', 'ی').replace('ه', 'ە')
     return text.strip()
 
 def sanitize_input(text):
-    """WAF: Strips out potential SQLi and XSS payloads."""
     if not text: return ""
     text = re.sub(r'<[^>]*>', '', text)
     sqli_patterns = [
@@ -648,24 +651,14 @@ def check_blocked(message):
     return False
 
 def get_knowledge_answer(query):
-    """Advanced Tool Finder: Matches keywords flexibly and returns raw code."""
     query_lower = query.lower().replace("_", " ")
-    
-    # 1. Exact Keyword Matches
     for key, answer in TERMUX_TOOLS.items():
         if re.search(rf'\b{re.escape(key)}\b', query_lower):
             return answer
-            
-    # 2. Fuzzy / Partial Matches
-    if "ddos" in query_lower or "attack" in query_lower:
-        return TERMUX_TOOLS["ddos"]
-    if "wifi" in query_lower or "scan" in query_lower:
-        return TERMUX_TOOLS["wifi_scan"]
-    if "phish" in query_lower or "فیش" in query_lower:
-        return TERMUX_TOOLS["zphisher"]
-    if "crack" in query_lower or "password" in query_lower or "پاسوۆرد" in query_lower:
-        return TERMUX_TOOLS["hydra"]
-        
+    if "ddos" in query_lower or "attack" in query_lower: return TERMUX_TOOLS["ddos"]
+    if "wifi" in query_lower or "scan" in query_lower: return TERMUX_TOOLS["wifi_scan"]
+    if "phish" in query_lower or "فیش" in query_lower: return TERMUX_TOOLS["zphisher"]
+    if "crack" in query_lower or "password" in query_lower or "پاسوۆرد" in query_lower: return TERMUX_TOOLS["hydra"]
     return None
 
 def fetch_github_code(query):
@@ -714,14 +707,73 @@ def perform_web_search(query, is_create=False):
         return "\n".join(lines)
     except Exception as e:
         log.error(f"DuckDuckGo search failed: {e}")
-        # GRACEFUL FALLBACK: If rate limited, try to find ANYTHING locally first.
         local_fallback = get_knowledge_answer(query)
         if local_fallback:
             return local_fallback
         return "❌ گەڕانی وێب ئێستا بلۆک کراوە. تکایە ناوی توڵەکە بە ڕاستەوخۆ بنووسە (بۆ نموونە: nmap یان zphisher)."
 
 # ==============================================================================
-# 9. STATE MACHINE & HTML GENERATOR
+# 9. AI VIDEO GENERATOR (HUGGING FACE API)
+# ==============================================================================
+
+def generate_ai_video(prompt, message):
+    """Generates a video using Hugging Face's free Inference API."""
+    if not HF_TOKEN:
+        return bot.reply_to(message, "❌ ببورە، بۆ دروستکردنی ڤیدیۆی AI پێویستە `HF_TOKEN` لە GitHub Secrets دابنێیت. (تۆکنێکی بەخۆڕایی لە huggingface.co وەربگرە)")
+
+    status = bot.reply_to(message, "🎬 ڤیدیۆکە دروست دەکرێت، ئەمە کەمێک کاتی دەوێت (١-٢ خولەک)...")
+    
+    API_URL = "https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7b"
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+    payload = {"inputs": prompt}
+
+    try:
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=120)
+        
+        if response.status_code == 200:
+            video_bytes = response.content
+            try:
+                bot.delete_message(message.chat.id, status.message_id)
+            except: pass
+            
+            # Send the generated video
+            bot.send_video(
+                message.chat.id, 
+                io.BytesIO(video_bytes), 
+                caption=f"🎬 ڤیدیۆی دروستکراو بۆ: <code>{safe_html(prompt)}</code>",
+                reply_to_message_id=message.message_id
+            )
+            log_request(message.from_user.id, "ai_video", prompt)
+            return
+        elif response.status_code == 503:
+            # Model is loading
+            return bot.edit_message_text(
+                "⏳ مۆدێلەکە لە هەڵمەتەکانی بارکردندایە. تکایە دووبارە هەوڵ بدە لە ماوەی ١ خولەکدا.",
+                message.chat.id, status.message_id
+            )
+        else:
+            log.error(f"HF API Error: {response.status_code} - {response.text}")
+            return bot.edit_message_text(
+                f"❌ کێشەیەک لە API ڕوویدا (کۆد: {response.status_code}). تکایە دواتر هەوڵ بدە.",
+                message.chat.id, status.message_id
+            )
+
+    except requests.exceptions.Timeout:
+        return bot.edit_message_text(
+            "⏳ کاتی ڤیدیۆکە تەواو بوو. تکایە پرۆمپتێکی کورتتر بەکاربهێنە.",
+            message.chat.id, status.message_id
+        )
+    except Exception as e:
+        log.error(f"Video Generation Error: {e}")
+        try:
+            bot.edit_message_text(
+                "❌ کێشەیەکی تەکنیکی ڕوویدا لە کاتی دروستکردنی ڤیدیۆ.",
+                message.chat.id, status.message_id
+            )
+        except: pass
+
+# ==============================================================================
+# 10. STATE MACHINE & HTML GENERATOR
 # ==============================================================================
 
 def generate_phishing_html(target, user_id):
@@ -760,7 +812,7 @@ def generate_phishing_html(target, user_id):
     )
 
 # ==============================================================================
-# 10. CORE COMMAND FUNCTIONS
+# 11. CORE COMMAND FUNCTIONS
 # ==============================================================================
 
 def handle_start(message, query):
@@ -791,6 +843,7 @@ def handle_help(message, query):
         "<b>فەرمانەکان:</b>\n"
         "/start — دەستپێکردن\n"
         "/help — یارمەتی\n"
+        "/video &lt;text&gt; — دروستکردنی ڤیدیۆی AI\n"
         "/id — ناسنامەی تیلیگرامت\n"
         "/lang ku|en — گۆڕینی زمان\n"
         "/cancel — پەشیمانبوونەوە لە پرسیار\n"
@@ -806,7 +859,7 @@ def handle_cancel(message, query):
         send_msg(message.chat.id, "هیچ پرسیارێک نییە بۆ هەڵوەشاندنەوە.")
 
 # ==============================================================================
-# 11. SUPER ADMIN PANEL & COMMANDS (22 FEATURES)
+# 12. SUPER ADMIN PANEL & COMMANDS (24 FEATURES)
 # ==============================================================================
 
 def show_panel(message):
@@ -814,9 +867,9 @@ def show_panel(message):
         "🎛 <b>پانێلی ئەدمینی باڵادەست (Super Admin)</b>\n"
         "───────────────────\n"
         "١. 📊 <code>/system</code> — ئاماری سیستەم\n"
-        "٢. 👥 <code>/users</code> — لیستی بەکارهێنەران (ئۆنلاین/ئۆفلاین)\n"
+        "٢. 👥 <code>/users</code> — لیستی بەکارهێنەران\n"
         "٣. 📁 <code>/export</code> — دەرهێنانی CSV\n"
-        "٤. ⭐ <code>/promote &lt;id&gt; &lt;h|w|m|forever&gt;</code> — کردن بە ئەدمینی سادە\n"
+        "٤. ⭐ <code>/promote &lt;id&gt; &lt;h|w|m|forever&gt;</code> — ئەدمینی سادە\n"
         "٥. 🚫 <code>/demote &lt;id&gt;</code> — لابردنی ئەدمینی سادە\n"
         "٦. 🚷 <code>/ban &lt;id&gt; &lt;h|d|w|m|forever&gt;</code> — باندکردن\n"
         "٧. ✅ <code>/unban &lt;id&gt;</code> — لابردنی باند\n"
@@ -828,13 +881,15 @@ def show_panel(message):
         "١٣. 📌 <code>/letter4</code> — لابردنی هەموو پینەکان\n"
         "١٤. 📜 <code>/history &lt;id&gt;</code> — مێژووی داواکاری\n"
         "١٥. 🛠 <code>/maintenance &lt;on|off&gt;</code> — دۆخی چاککردنەوە\n"
-        "١٦. 📝 <code>/logs</code> — مێژووی کردارەکانی ئەدمین\n"
-        "١٧. 💾 <code>/db</code> — داگرتنی فایلی داتابەیس\n"
+        "١٦. 📝 <code>/logs</code> — مێژووی ئەدمین\n"
+        "١٧. 💾 <code>/db</code> — داگرتنی داتابەیس\n"
         "١٨. 🔄 <code>/reset_user &lt;id&gt;</code> — ڕیسێتی بەکارهێنەر\n"
-        "١٩. ⏱ <code>/ping</code> — پشکنینی خێرایی بۆت\n"
-        "٢٠. 🚀 <code>/backup</code> — پاشەکەوتکردنی داتابەیس\n"
-        "٢١. 📖 <code>/help_admin</code> — ڕێنمایی ئەدمین\n"
-        "٢٢. 🎭 <code>/sudo &lt;id&gt; &lt;command&gt;</code> — جێبەجێکردنی فەرمان بە ناوی کەسێکی تر\n"
+        "١٩. ⏱ <code>/ping</code> — پشکنینی خێرایی\n"
+        "٢٠. 🚀 <code>/backup</code> — پاشەکەوتکردن\n"
+        "٢١. 📖 <code>/help_admin</code> — ڕێنمایی\n"
+        "٢٢. 🎭 <code>/sudo &lt;id&gt; &lt;command&gt;</code> — جێبەجێکردن\n"
+        "٢٣. 🎬 <code>/video &lt;text&gt;</code> — دروستکردنی ڤیدیۆی AI\n"
+        "٢٤. 🤖 <code>/set_hf</code> — بەستنی تۆکنی Hugging Face\n"
     )
     send_msg(message.chat.id, panel_text)
 
@@ -1115,10 +1170,26 @@ def handle_admin_command(message, cmd, query):
             return bot.reply_to(message, f"🎭 فەرمانەکە بە ناوی <code>{target}</code> جێبەجێ کرا: {safe_html(sudo_cmd)}")
         return bot.reply_to(message, "شێواز: /sudo <id> <command>")
 
+    # 23. /video <text>
+    elif cmd == "/video":
+        if len(parts) >= 2:
+            prompt = " ".join(parts[1:])
+            return generate_ai_video(prompt, message)
+        return bot.reply_to(message, "شێواز: /video <prompt> بۆ دروستکردنی ڤیدیۆ.")
+
+    # 24. /set_hf <token>
+    elif cmd == "/set_hf":
+        if len(parts) >= 2:
+            global HF_TOKEN
+            HF_TOKEN = parts[1].strip()
+            os.environ["HF_TOKEN"] = HF_TOKEN
+            return bot.reply_to(message, "✅ تۆکنی Hugging Face دانرا (بۆ ئەم سێشنە).")
+        return bot.reply_to(message, "شێواز: /set_hf <token>")
+
     return bot.reply_to(message, "فەرمانەکە نەدۆزرایەوە یان هەڵەیە.")
 
 # ==============================================================================
-# 12. BULLETPROOF MESSAGE HANDLER
+# 13. BULLETPROOF MESSAGE HANDLER
 # ==============================================================================
 
 @bot.message_handler(content_types=["text"])
@@ -1149,6 +1220,14 @@ def master_handler(message):
             elif cmd == "/help": return handle_help(message, query)
             elif cmd == "/cancel": return handle_cancel(message, query)
             elif cmd == "/id": return send_msg(message.chat.id, f"🆔 ناسنامەی تیلیگرامت: <code>{uid}</code>")
+            elif cmd == "/video":
+                parts = query.split(maxsplit=1)
+                if len(parts) < 2:
+                    return send_msg(message.chat.id, "🎬 شێواز: /video <prompt> بۆ نموونە: /video a cat flying in space")
+                if not is_admin(uid):
+                    if not spend_credit(uid):
+                        return send_msg(message.chat.id, f"⛔ کرێدیتت نەماوە. باڵانس: {get_credits(uid)}")
+                return generate_ai_video(parts[1].strip(), message)
             elif cmd == "/lang":
                 parts = query.replace(cmd, "").strip().lower()
                 if not parts: return send_msg(message.chat.id, "🌐 شێواز: /lang ku یان /lang en")
@@ -1161,7 +1240,7 @@ def master_handler(message):
             elif cmd in ("/panel", "/system", "/users", "/export", "/promote", "/demote", 
                          "/ban", "/unban", "/credit", "/credit2", "/letter", "/letter2", 
                          "/letter3", "/letter4", "/history", "/maintenance", "/logs", 
-                         "/db", "/reset_user", "/ping", "/backup", "/help_admin", "/sudo"):
+                         "/db", "/reset_user", "/ping", "/backup", "/help_admin", "/sudo", "/set_hf"):
                 
                 if not is_super_admin(uid):
                     return send_msg(message.chat.id, "🚫 تەنها ئەدمینی باڵادەست دەتوانێت ئەم فەرمانە بەکاربهێنێت.")
@@ -1272,12 +1351,12 @@ def master_handler(message):
         # Fallback to avoid bot crash
 
 # ==============================================================================
-# 13. MAIN EXECUTION
+# 14. MAIN EXECUTION
 # ==============================================================================
 
 if __name__ == "__main__":
     log.info("========================================")
-    log.info("STARTING BLACK HAT AI PRIME (UNBREAKABLE)")
+    log.info("STARTING BLACK HAT AI PRIME (AI VIDEO)")
     log.info("========================================")
     
     init_db()
