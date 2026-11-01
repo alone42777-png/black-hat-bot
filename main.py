@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-BLACK HAT AI PRIME — THE ULTIMATE AI VIDEO GENERATOR & SECURITY FORTRESS
+BLACK HAT AI PRIME — THE ULTIMATE AI VIDEO & SECURITY FORTRESS
 ================================================================================
 This file is the absolute maximum capacity single-file architecture.
 It includes a massive local database of 200+ hacking tools, an AI Video
@@ -731,12 +731,20 @@ def generate_ai_video(prompt, message):
         response = requests.post(API_URL, headers=headers, json=payload, timeout=120)
         
         if response.status_code == 200:
+            content_type = response.headers.get("Content-Type", "")
+            if "video" not in content_type and "mp4" not in content_type:
+                error_msg = response.text[:300]
+                log.error(f"HF API returned 200 but not a video: {error_msg}")
+                return bot.edit_message_text(
+                    f"❌ API وەڵامی نەدا بە ڤیدیۆ. هۆکار: <code>{safe_html(error_msg)}</code>",
+                    message.chat.id, status.message_id
+                )
+                
             video_bytes = response.content
             try:
                 bot.delete_message(message.chat.id, status.message_id)
             except: pass
             
-            # Send the generated video
             bot.send_video(
                 message.chat.id, 
                 io.BytesIO(video_bytes), 
@@ -745,29 +753,30 @@ def generate_ai_video(prompt, message):
             )
             log_request(message.from_user.id, "ai_video", prompt)
             return
+            
         elif response.status_code == 503:
-            # Model is loading
             return bot.edit_message_text(
-                "⏳ مۆدێلەکە لە هەڵمەتەکانی بارکردندایە. تکایە دووبارە هەوڵ بدە لە ماوەی ١ خولەکدا.",
+                "⏳ مۆدێلەکە لە هەڵمەتەکانی بارکردندایە (Sleeping). تکایە دووبارە هەوڵ بدە لە ماوەی ١ خولەکدا.",
                 message.chat.id, status.message_id
             )
         else:
-            log.error(f"HF API Error: {response.status_code} - {response.text}")
+            error_details = response.text[:300]
+            log.error(f"HF API Error: {response.status_code} - {error_details}")
             return bot.edit_message_text(
-                f"❌ کێشەیەک لە API ڕوویدا (کۆد: {response.status_code}). تکایە دواتر هەوڵ بدە.",
+                f"❌ کێشەیەک لە API ڕوویدا (کۆد: {response.status_code}).<br>وردەکاری: <code>{safe_html(error_details)}</code>",
                 message.chat.id, status.message_id
             )
 
     except requests.exceptions.Timeout:
         return bot.edit_message_text(
-            "⏳ کاتی ڤیدیۆکە تەواو بوو. تکایە پرۆمپتێکی کورتتر بەکاربهێنە.",
+            "⏳ کاتی ڤیدیۆکە تەواو بوو. تکایە پرۆمپتێکی کورتتر بەکاربهێنە یان دواتر هەوڵ بدە.",
             message.chat.id, status.message_id
         )
     except Exception as e:
         log.error(f"Video Generation Error: {e}")
         try:
             bot.edit_message_text(
-                "❌ کێشەیەکی تەکنیکی ڕوویدا لە کاتی دروستکردنی ڤیدیۆ.",
+                f"❌ کێشەیەکی تەکنیکی ڕوویدا: {safe_html(str(e)[:200])}",
                 message.chat.id, status.message_id
             )
         except: pass
