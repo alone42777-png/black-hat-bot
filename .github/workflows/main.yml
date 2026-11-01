@@ -26,10 +26,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyTelegramBotAPI
-          pip install ddgs
+          pip install pyTelegramBotAPI ddgs requests
 
       - name: Run bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: python main.py
