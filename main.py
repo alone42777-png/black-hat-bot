@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-BLACK HAT AI PRIME — THE ULTIMATE AI VIDEO & SECURITY FORTRESS
+BLACK HAT AI PRIME — THE ULTIMATE TOKENLESS AI IMAGE & SECURITY FORTRESS
 ================================================================================
 This file is the absolute maximum capacity single-file architecture.
-It includes a massive local database of 200+ hacking tools, an AI Video
-Generator, robust state management for phishing, and complete bot logic.
+It includes a massive local database of 200+ hacking tools, an AI Image
+Generator (Tokenless), robust state management for phishing, and bot logic.
 ================================================================================
 """
 
@@ -26,7 +26,7 @@ import io
 import requests
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 # Third-Party Imports
 import telebot
@@ -48,9 +48,6 @@ except ImportError:
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 DB_PATH = os.getenv("DB_PATH", "bot_database.db")
 DEFAULT_LANG = os.getenv("DEFAULT_LANG", "ku").strip().lower()
-
-# Hugging Face Token for AI Video Generation
-HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 
 # Super Admin IDs (Hardcoded, Highest Level)
 SUPER_ADMIN_IDS = {5527152252, 8487940066}
@@ -645,78 +642,38 @@ def perform_web_search(query, is_create=False):
         return "❌ گەڕانی وێب ئێستا بلۆک کراوە. تکایە ناوی توڵەکە بە ڕاستەوخۆ بنووسە (بۆ نموونە: nmap یان zphisher)."
 
 # ==============================================================================
-# 9. AI VIDEO GENERATOR (HUGGING FACE API)
+# 9. AI IMAGE GENERATOR (TOKENLESS - POLLINATIONS)
 # ==============================================================================
 
 def generate_ai_video(prompt, message):
-    """Generates a video using Hugging Face's free Inference API."""
-    if not HF_TOKEN:
-        return bot.reply_to(message, "❌ ببورە، بۆ دروستکردنی ڤیدیۆی AI پێویستە `HF_TOKEN` لە GitHub Secrets دابنێیت. (تۆکنێکی بەخۆڕایی لە huggingface.co وەربگرە)")
-
-    status = bot.reply_to(message, "🎬 ڤیدیۆکە دروست دەکرێت، ئەمە کەمێک کاتی دەوێت (١-٢ خولەک)...")
+    """Generates an image using Pollinations AI (No token needed, never blocks)."""
+    status = bot.reply_to(message, "🎨 وێنەکە دروست دەکرێت، تکایە چاوەڕوان بە...")
     
-    API_URL = "https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7b"
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-    payload = {"inputs": prompt}
-
     try:
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=120)
+        # Pollinations AI is completely free and doesn't block IPs
+        encoded_prompt = quote(prompt)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model=flux"
         
-        if response.status_code == 200:
-            content_type = response.headers.get("Content-Type", "")
-            if "video" not in content_type and "mp4" not in content_type:
-                error_msg = response.text[:300]
-                log.error(f"HF API returned 200 but not a video: {error_msg}")
-                return bot.edit_message_text(
-                    f"❌ API وەڵامی نەدا بە ڤیدیۆ. هۆکار: <code>{safe_html(error_msg)}</code>",
-                    message.chat.id, status.message_id
-                )
-                
-            video_bytes = response.content
-            try:
-                bot.delete_message(message.chat.id, status.message_id)
+        img_response = requests.get(image_url, timeout=60)
+        if img_response.status_code == 200:
+            try: bot.delete_message(message.chat.id, status.message_id)
             except: pass
             
-            bot.send_video(
-                message.chat.id, 
-                io.BytesIO(video_bytes), 
-                caption=f"🎬 ڤیدیۆی دروستکراو بۆ: <code>{safe_html(prompt)}</code>",
+            bot.send_photo(
+                message.chat.id,
+                io.BytesIO(img_response.content),
+                caption=f"🖼 وێنەی AI دروستکراو بۆ: <code>{safe_html(prompt)}</code>",
                 reply_to_message_id=message.message_id
             )
-            log_request(message.from_user.id, "ai_video", prompt)
+            log_request(message.from_user.id, "ai_image", prompt)
             return
-            
-        elif response.status_code == 503:
-            return bot.edit_message_text(
-                "⏳ مۆدێلەکە لە هەڵمەتەکانی بارکردندایە (Sleeping). تکایە دووبارە هەوڵ بدە لە ماوەی ١ خولەکدا.",
-                message.chat.id, status.message_id
-            )
         else:
-            error_details = response.text[:300]
-            log.error(f"HF API Error: {response.status_code} - {error_details}")
-            return bot.edit_message_text(
-                f"❌ کێشەیەک لە API ڕوویدا (کۆد: {response.status_code}).<br>وردەکاری: <code>{safe_html(error_details)}</code>",
-                message.chat.id, status.message_id
-            )
-
-    except requests.exceptions.ConnectionError as e:
-        log.error(f"HF Connection Error: {e}")
-        return bot.edit_message_text(
-            "❌ پەیوەندی بە سێرڤەری Hugging Face نەکرا. (ئەمە هەڵەیەکی تۆڕە، تکایە دواتر هەوڵ بدە یان دڵنیابەرەوە کە GitHub Actions ڕێگەت پێدەدات)",
-            message.chat.id, status.message_id
-        )
-    except requests.exceptions.Timeout:
-        return bot.edit_message_text(
-            "⏳ کاتی ڤیدیۆکە تەواو بوو. تکایە پرۆمپتێکی کورتتر بەکاربهێنە یان دواتر هەوڵ بدە.",
-            message.chat.id, status.message_id
-        )
+            return bot.edit_message_text("❌ سێرڤەری وێنە شکستی هێنا. دواتر هەوڵ بدە.", message.chat.id, status.message_id)
+            
     except Exception as e:
-        log.error(f"Video Generation Error: {e}")
+        log.error(f"Image Generation Error: {e}")
         try:
-            bot.edit_message_text(
-                f"❌ کێشەیەکی تەکنیکی ڕوویدا: {safe_html(str(e)[:200])}",
-                message.chat.id, status.message_id
-            )
+            bot.edit_message_text("❌ کێشەیەکی تەکنیکی ڕوویدا. دواتر هەوڵ بدە.", message.chat.id, status.message_id)
         except: pass
 
 # ==============================================================================
@@ -790,7 +747,7 @@ def handle_help(message, query):
         "<b>فەرمانەکان:</b>\n"
         "/start — دەستپێکردن\n"
         "/help — یارمەتی\n"
-        "/video &lt;text&gt; — دروستکردنی ڤیدیۆی AI\n"
+        "/video &lt;text&gt; — دروستکردنی وێنەی AI\n"
         "/id — ناسنامەی تیلیگرامت\n"
         "/lang ku|en — گۆڕینی زمان\n"
         "/cancel — پەشیمانبوونەوە لە پرسیار\n"
@@ -835,7 +792,7 @@ def show_panel(message):
         "٢٠. 🚀 <code>/backup</code> — پاشەکەوتکردن\n"
         "٢١. 📖 <code>/help_admin</code> — ڕێنمایی\n"
         "٢٢. 🎭 <code>/sudo &lt;id&gt; &lt;command&gt;</code> — جێبەجێکردن\n"
-        "٢٣. 🎬 <code>/video &lt;text&gt;</code> — دروستکردنی ڤیدیۆی AI\n"
+        "٢٣. 🎨 <code>/video &lt;text&gt;</code> — دروستکردنی وێنەی AI\n"
         "٢٤. 🤖 <code>/set_hf</code> — بەستنی تۆکنی Hugging Face\n"
     )
     send_msg(message.chat.id, panel_text)
@@ -1122,7 +1079,7 @@ def handle_admin_command(message, cmd, query):
         if len(parts) >= 2:
             prompt = " ".join(parts[1:])
             return generate_ai_video(prompt, message)
-        return bot.reply_to(message, "شێواز: /video <prompt> بۆ دروستکردنی ڤیدیۆ.")
+        return bot.reply_to(message, "شێواز: /video <prompt> بۆ دروستکردنی وێنە.")
 
     # 24. /set_hf <token>
     elif cmd == "/set_hf":
@@ -1170,7 +1127,7 @@ def master_handler(message):
             elif cmd == "/video":
                 parts = query.split(maxsplit=1)
                 if len(parts) < 2:
-                    return send_msg(message.chat.id, "🎬 شێواز: /video <prompt> بۆ نموونە: /video a cat flying in space")
+                    return send_msg(message.chat.id, "🎨 شێواز: /video <prompt> بۆ نموونە: /video a cat flying in space")
                 if not is_admin(uid):
                     if not spend_credit(uid):
                         return send_msg(message.chat.id, f"⛔ کرێدیتت نەماوە. باڵانس: {get_credits(uid)}")
@@ -1303,7 +1260,7 @@ def master_handler(message):
 
 if __name__ == "__main__":
     log.info("========================================")
-    log.info("STARTING BLACK HAT AI PRIME (AI VIDEO)")
+    log.info("STARTING BLACK HAT AI PRIME (TOKENLESS)")
     log.info("========================================")
     
     init_db()
