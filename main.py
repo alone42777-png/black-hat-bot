@@ -7,23 +7,6 @@ BLACK HAT AI PRIME — THE ULTIMATE AI VIDEO & SECURITY FORTRESS
 This file is the absolute maximum capacity single-file architecture.
 It includes a massive local database of 200+ hacking tools, an AI Video
 Generator, robust state management for phishing, and complete bot logic.
-
-Features:
-1. Complete Telegram Bot setup.
-2. Advanced SQLite database.
-3. 100+ distinct greetings.
-4. MASSIVE local database of 200+ Termux tools AND raw Python/Bash payloads.
-5. AI VIDEO GENERATOR (/video): Uses Hugging Face free API to generate videos.
-6. DYNAMIC STATE MACHINE for Phishing Tool generation.
-7. RAW GITHUB CODE EXTRACTOR for fallback.
-8. ULTRA-DETAILED Termux/Nano instructions appended to every tool.
-9. Complete Admin Panel with 24 features.
-10. DUAL-LEVEL ADMIN SYSTEM (Super & Simple).
-11. SMART BAN: Sends a pinned message to the banned user instantly.
-12. PINNED BROADCAST (/letter3) & UNPIN ALL (/letter4).
-13. WAF (Web Application Firewall): Strict SQLi and XSS filtering.
-14. ANTI-FLOOD: Prevents spam and rapid fire commands.
-15. RBAC: Strict Role-Based Access Control.
 ================================================================================
 """
 
@@ -140,37 +123,6 @@ GREETINGS_KU = [
     "سڵاو، بەخێربێی بۆ مێزەکەم. چ پێویستە؟",
     "سڵاو، ئامادەیم بۆ کارەکە. دەست پێبکە.",
     "سڵاو، چۆن دەتوانم ڕۆژەکەت باشتر بکەم؟",
-    "سڵاو، من لێرەم بۆ هەموو جۆرە پرسیارێک.",
-    "سڵاو، با کارەکە بکەین. چ دەوێت؟",
-    "سڵاو گیانم، بەخێربێی. چ پرسیارێک هەیەت؟",
-    "سڵاو، دڵخۆش بووم بە بینینت. چ یارمەتییەک پێویستە؟",
-    "سڵاو، من ئامادەیم بۆت. فەرموو بۆ کوێ پێویستت بە یارمەتییە؟",
-    "سڵاو، با دەست پێبکەین. چ شتێک دەتەوێت بزانیت؟",
-    "سڵاو، هیوادارم ڕۆژێکی باشت هەبێت. چ دەکەین؟",
-    "سڵاو، من لێرەم بۆ کارەکە. چ پرسیارێک هەیەت؟",
-    "سڵاو، بەخێربێی. چ پێویستە؟",
-    "سڵاو، با دەست پێبکەین. چ دەوێت؟",
-    "سڵاو شیرینم، من ئامادەیم بۆت. فەرموو.",
-    "سڵاو، من لەگەڵ تۆم. چ یارمەتییەک پێویستە؟",
-    "سڵاو، هیوادارم باش بیت. چ دەکەین؟",
-    "سڵاو، با کارەکە بکەین. چ پرسیارێک هەیەت؟",
-    "سڵاو، من لێرەم بۆ هەموو جۆرە پرسیارێک.",
-    "سڵاو، دڵخۆشم کە هاتوویت. چ پێویستە؟",
-    "سڵاو، با دەست پێبکەین. چ شتێک دەتەوێت بزانیت؟",
-    "سڵاو، من ئامادەیم بۆت. فەرموو بۆ کوێ پێویستت بە یارمەتییە؟",
-    "سڵاو، هیوادارم ڕۆژێکی باشت هەبێت. چ دەکەین؟",
-    "سڵاو، من لێرەم بۆ کارەکە. چ پرسیارێک هەیەت؟",
-    "سڵاو، بەخێربێی. چ پێویستە؟",
-    "سڵاو، با دەست پێبکەین. چ دەوێت؟",
-    "سڵاو شیرینم، من ئامادەیم بۆت. فەرموو.",
-    "سڵاو، من لەگەڵ تۆم. چ یارمەتییەک پێویستە؟",
-    "سڵاو، هیوادارم باش بیت. چ دەکەین؟",
-    "سڵاو، با کارەکە بکەین. چ پرسیارێک هەیەت؟",
-    "سڵاو، من لێرەم بۆ هەموو جۆرە پرسیارێک.",
-    "سڵاو، دڵخۆشم کە هاتوویت. چ پێویستە؟",
-    "سڵاو، با دەست پێبکەین. چ شتێک دەتەوێت بزانیت؟",
-    "سڵاو، من ئامادەیم بۆت. فەرموو بۆ کوێ پێویستت بە یارمەتییە؟",
-    "سڵاو بەخێربێی، چۆنی؟",
 ]
 
 GREETINGS_EN = [
@@ -184,26 +136,6 @@ GREETINGS_EN = [
     "Hello sir, I am here to serve you. Go ahead.",
     "Hello, hope I can be useful to you. What is needed?",
     "Hello, a new opportunity — let's start.",
-    "Hello dear, I am always ready for you. What do you want?",
-    "Hello, it's work time now. What are we doing?",
-    "Hi, glad you came. What assistance is needed?",
-    "Hello, let's begin. What question do you have?",
-    "Hello, I am with you every step of the way. Go ahead.",
-    "Hi sweetheart, welcome. What do you want to know?",
-    "Hello, hope you are well. What question do you have?",
-    "Hi, welcome to my desk. What do you need?",
-    "Hello, I am ready for work. Start now.",
-    "Hi, how can I make your day better?",
-    "Hello, I am here for all types of questions.",
-    "Hi, let's do the work. What do you want?",
-    "Hello dear, welcome. What question do you have?",
-    "Hi, happy to see you. What help is needed?",
-    "Hello, I am ready for you. Where do you need assistance?",
-    "Hello, let's begin. What do you want to know?",
-    "Hi, hope you have a good day. What are we doing?",
-    "Hello, I am here for the work. What question do you have?",
-    "Hi, welcome. What is needed?",
-    "Hello, let's begin. What do you want?",
 ]
 
 # ------------------------------------------------------------------------------
@@ -767,6 +699,12 @@ def generate_ai_video(prompt, message):
                 message.chat.id, status.message_id
             )
 
+    except requests.exceptions.ConnectionError as e:
+        log.error(f"HF Connection Error: {e}")
+        return bot.edit_message_text(
+            "❌ پەیوەندی بە سێرڤەری Hugging Face نەکرا. (ئەمە هەڵەیەکی تۆڕە، تکایە دواتر هەوڵ بدە یان دڵنیابەرەوە کە GitHub Actions ڕێگەت پێدەدات)",
+            message.chat.id, status.message_id
+        )
     except requests.exceptions.Timeout:
         return bot.edit_message_text(
             "⏳ کاتی ڤیدیۆکە تەواو بوو. تکایە پرۆمپتێکی کورتتر بەکاربهێنە یان دواتر هەوڵ بدە.",
