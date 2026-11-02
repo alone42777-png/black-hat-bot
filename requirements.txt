@@ -1,3 +1,2 @@
-pyTelegramBotAPI
-openai
-python-dotenv
+requests==2.32.3
+psycopg[binary]==3.2.6
