@@ -13,25 +13,33 @@ import psycopg
 
 from datetime import datetime, timedelta, timezone
 from psycopg.rows import dict_row
-from links import create_link, consume_link
+from links import create_link
 
 # ================= CONFIG =================
 
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 DATABASE_URL = os.environ["DATABASE_URL"]
 
-OWNER_IDS = {
-    int(x.strip())
-    for x in os.getenv("OWNER_IDS", "").split(",")
-    if x.strip().isdigit()
-}
+def parse_ids(value):
+    return {
+        int(x.strip())
+        for x in value.replace(" ", ",").split(",")
+        if x.strip().isdigit()
+    }
+
+# Two default Owners. OWNER_IDS secret can override these.
+OWNER_IDS = parse_ids(
+    os.getenv("OWNER_IDS", "8487940066,5527152252")
+)
+
+# Leave ADMIN_IDS empty until you add admins.
+ADMIN_IDS = parse_ids(os.getenv("ADMIN_IDS", ""))
 
 CHANNEL = os.getenv("REQUIRED_CHANNEL", "").strip()
 CHANNEL_URL = os.getenv("CHANNEL_URL", "").strip()
 
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-# 5 hours 50 minutes
 RUN_SECONDS = 5 * 60 * 60 + 50 * 60
 
 FOOTER = (
@@ -43,7 +51,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s"
 )
-
 log = logging.getLogger("ALONE")
 
 
@@ -59,7 +66,6 @@ def db():
 
 def init_db():
     with db() as conn:
-
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id BIGINT PRIMARY KEY,
@@ -102,6 +108,50 @@ def init_db():
         """)
 
 
+# ================= ROLES =================
+
+def is_owner(user_id):
+    return user_id in OWNER_IDS
+
+
+def is_admin(user_id):
+    return user_id in ADMIN_IDS and user_id not in OWNER_IDS
+
+
+def is_privileged(user_id):
+    return is_owner(user_id) or is_admin(user_id)
+
+
+def can_manage_user(actor_id, target_id):
+    """
+    Owners can manage normal users and admins.
+    Admins can manage normal users only.
+    Owners cannot manage another Owner.
+    """
+
+    if actor_id == target_id:
+        return False
+
+    if is_owner(target_id):
+        return False
+
+    if is_owner(actor_id):
+        return True
+
+    if is_admin(actor_id):
+        return not is_admin(target_id)
+
+    return False
+
+
+def role_name(user_id):
+    if is_owner(user_id):
+        return "Owner"
+    if is_admin(user_id):
+        return "Admin"
+    return "User"
+
+
 # ================= TELEGRAM API =================
 
 def api(method, payload=None):
@@ -111,7 +161,6 @@ def api(method, payload=None):
             json=payload or {},
             timeout=45
         )
-
         response.raise_for_status()
         data = response.json()
 
@@ -132,7 +181,7 @@ def api(method, payload=None):
 def send(chat_id, message, reply_markup=None):
     payload = {
         "chat_id": chat_id,
-        "text": message[:3900] + FOOTER
+        "text": message[:3500] + FOOTER
     }
 
     if reply_markup:
@@ -146,7 +195,7 @@ def answer_callback(callback_id, message=""):
         "answerCallbackQuery",
         {
             "callback_query_id": callback_id,
-            "text": message
+            "text": message[:180]
         }
     )
 
@@ -158,7 +207,6 @@ def register_user(user):
         conn.execute("""
             INSERT INTO users(user_id, username, first_name)
             VALUES (%s, %s, %s)
-
             ON CONFLICT(user_id) DO UPDATE SET
                 username = EXCLUDED.username,
                 first_name = EXCLUDED.first_name,
@@ -178,10 +226,6 @@ def get_user(user_id):
         ).fetchone()
 
 
-def is_owner(user_id):
-    return user_id in OWNER_IDS
-
-
 def blocked(user_id):
     row = get_user(user_id)
 
@@ -199,23 +243,16 @@ def member_ok(user_id):
     if not CHANNEL:
         return True
 
-    result = api(
-        "getChatMember",
-        {
-            "chat_id": CHANNEL,
-            "user_id": user_id
-        }
-    )
+    result = api("getChatMember", {
+        "chat_id": CHANNEL,
+        "user_id": user_id
+    })
 
     if not result.get("ok"):
         return False
 
-    status = result["result"].get("status")
-
-    return status in (
-        "creator",
-        "administrator",
-        "member"
+    return result["result"].get("status") in (
+        "creator", "administrator", "member"
     )
 
 
@@ -225,20 +262,11 @@ def start_keyboard():
     return {
         "inline_keyboard": [
             [
-                {
-                    "text": "💳 باڵانسی من",
-                    "callback_data": "balance"
-                },
-                {
-                    "text": "🔗 دروستکردنی لینک",
-                    "callback_data": "newlink"
-                }
+                {"text": "💳 باڵانسی من", "callback_data": "balance"},
+                {"text": "🔗 دروستکردنی لینک", "callback_data": "newlink"}
             ],
             [
-                {
-                    "text": "ℹ️ یارمەتی",
-                    "callback_data": "help"
-                }
+                {"text": "ℹ️ یارمەتی", "callback_data": "help"}
             ]
         ]
     }
@@ -248,24 +276,12 @@ def panel_keyboard():
     return {
         "inline_keyboard": [
             [
-                {
-                    "text": "📊 ئامار",
-                    "callback_data": "stats"
-                },
-                {
-                    "text": "👥 بەکارهێنەران",
-                    "callback_data": "users"
-                }
+                {"text": "📊 ئامار", "callback_data": "stats"},
+                {"text": "👥 بەکارهێنەران", "callback_data": "users"}
             ],
             [
-                {
-                    "text": "🧾 دوا مامەڵەکان",
-                    "callback_data": "transactions"
-                },
-                {
-                    "text": "🔄 نوێکردنەوە",
-                    "callback_data": "stats"
-                }
+                {"text": "🧾 دوا مامەڵەکان", "callback_data": "transactions"},
+                {"text": "🔄 نوێکردنەوە", "callback_data": "stats"}
             ]
         ]
     }
@@ -279,7 +295,7 @@ def help_text():
         "/start — دەستپێکردن\n"
         "/balance — باڵانس\n"
         "/help — یارمەتی\n\n"
-        "فەرمانەکانی خاوەن:\n"
+        "فەرمانەکانی بەڕێوەبەر:\n"
         "/panel\n"
         "/addcredit USER_ID AMOUNT\n"
         "/removecredit USER_ID AMOUNT\n"
@@ -295,12 +311,10 @@ def help_text():
 # ================= CREDITS =================
 
 def credit_change(admin_id, user_id, amount, reason):
-
     if amount == 0:
         raise ValueError("Amount cannot be zero")
 
     with db() as conn:
-
         row = conn.execute("""
             SELECT credits FROM users
             WHERE user_id=%s
@@ -316,8 +330,7 @@ def credit_change(admin_id, user_id, amount, reason):
             raise ValueError("Not enough credits")
 
         conn.execute("""
-            UPDATE users
-            SET credits=%s
+            UPDATE users SET credits=%s
             WHERE user_id=%s
         """, (new_value, user_id))
 
@@ -326,27 +339,53 @@ def credit_change(admin_id, user_id, amount, reason):
                 user_id, admin_id, amount, reason
             )
             VALUES (%s, %s, %s, %s)
-        """, (
-            user_id,
-            admin_id,
-            amount,
-            reason
-        ))
+        """, (user_id, admin_id, amount, reason))
 
     return new_value
+
+
+def spend_credit(user_id, reason):
+    """
+    Owners and Admins never lose credits.
+    Normal users spend one credit atomically.
+    """
+
+    if is_privileged(user_id):
+        return True
+
+    with db() as conn:
+        row = conn.execute("""
+            SELECT credits FROM users
+            WHERE user_id=%s
+            FOR UPDATE
+        """, (user_id,)).fetchone()
+
+        if not row or row["credits"] < 1:
+            return False
+
+        conn.execute("""
+            UPDATE users
+            SET credits=credits-1
+            WHERE user_id=%s
+        """, (user_id,))
+
+        conn.execute("""
+            INSERT INTO transactions(
+                user_id, admin_id, amount, reason
+            )
+            VALUES (%s, NULL, -1, %s)
+        """, (user_id, reason))
+
+    return True
 
 
 # ================= BAN SYSTEM =================
 
 def parse_duration(value):
-
     value = value.lower().strip()
 
     if value == "forever":
-        return datetime(
-            9999, 12, 31,
-            tzinfo=timezone.utc
-        )
+        return datetime(9999, 12, 31, tzinfo=timezone.utc)
 
     units = {
         "m": 60,
@@ -358,17 +397,13 @@ def parse_duration(value):
     }
 
     for unit in ("mo", "m", "h", "d", "w", "y"):
-
         if value.endswith(unit):
-
             number = int(value[:-len(unit)])
 
             if number > 0:
                 return (
                     datetime.now(timezone.utc)
-                    + timedelta(
-                        seconds=number * units[unit]
-                    )
+                    + timedelta(seconds=number * units[unit])
                 )
 
     raise ValueError(
@@ -376,12 +411,46 @@ def parse_duration(value):
     )
 
 
+def set_ban(actor_id, target_id, until):
+    if not can_manage_user(actor_id, target_id):
+        raise PermissionError(
+            "ناتوانیت ئەم بەکارهێنەرە باند بکەیت."
+        )
+
+    with db() as conn:
+        result = conn.execute("""
+            UPDATE users
+            SET banned_until=%s
+            WHERE user_id=%s
+            RETURNING user_id
+        """, (until, target_id)).fetchone()
+
+    if not result:
+        raise ValueError("User not found")
+
+
+def remove_ban(actor_id, target_id):
+    if not can_manage_user(actor_id, target_id):
+        raise PermissionError(
+            "ناتوانیت باندی ئەم بەکارهێنەرە لاببەیت."
+        )
+
+    with db() as conn:
+        result = conn.execute("""
+            UPDATE users
+            SET banned_until=NULL
+            WHERE user_id=%s
+            RETURNING user_id
+        """, (target_id,)).fetchone()
+
+    if not result:
+        raise ValueError("User not found")
+
+
 # ================= STATISTICS =================
 
 def stats_text():
-
     with db() as conn:
-
         total = conn.execute(
             "SELECT COUNT(*) AS n FROM users"
         ).fetchone()["n"]
@@ -396,7 +465,7 @@ def stats_text():
             FROM users
         """).fetchone()["n"]
 
-        banned = conn.execute("""
+        banned_count = conn.execute("""
             SELECT COUNT(*) AS n FROM users
             WHERE banned_until > NOW()
         """).fetchone()["n"]
@@ -405,7 +474,7 @@ def stats_text():
         "📊 ALONE — ئامار\n\n"
         f"👥 کۆی بەکارهێنەران: {total}\n"
         f"🟢 چالاک لە ٧ ڕۆژی ڕابردوو: {active}\n"
-        f"🚫 باندکراو: {banned}\n"
+        f"🚫 باندکراو: {banned_count}\n"
         f"💳 کۆی کرێدیت: {credits}"
     )
 
@@ -413,9 +482,7 @@ def stats_text():
 # ================= BROADCAST =================
 
 def broadcast(admin_id, message):
-
     with db() as conn:
-
         ids = conn.execute(
             "SELECT user_id FROM users"
         ).fetchall()
@@ -432,14 +499,10 @@ def broadcast(admin_id, message):
     failed_count = 0
 
     for item in ids:
-
-        result = api(
-            "sendMessage",
-            {
-                "chat_id": item["user_id"],
-                "text": message[:3900] + FOOTER
-            }
-        )
+        result = api("sendMessage", {
+            "chat_id": item["user_id"],
+            "text": message[:3500] + FOOTER
+        })
 
         if result.get("ok"):
             sent_count += 1
@@ -453,11 +516,7 @@ def broadcast(admin_id, message):
             UPDATE broadcasts
             SET sent_count=%s, failed_count=%s
             WHERE id=%s
-        """, (
-            sent_count,
-            failed_count,
-            broadcast_id
-        ))
+        """, (sent_count, failed_count, broadcast_id))
 
     return sent_count, failed_count
 
@@ -465,7 +524,6 @@ def broadcast(admin_id, message):
 # ================= COMMANDS =================
 
 def command(update):
-
     message = update.get("message") or {}
     user = message.get("from", {})
     chat_id = (message.get("chat") or {}).get("id")
@@ -475,48 +533,30 @@ def command(update):
         return
 
     register_user(user)
-
     uid = user["id"]
 
     if blocked(uid):
-        send(
-            chat_id,
-            "🚫 ئەم هەژمارە باندکراوە."
-        )
+        send(chat_id, "🚫 ئەم هەژمارە باندکراوە.")
         return
 
     if text.startswith("/start"):
-
         if not member_ok(uid):
-
             msg = (
                 "سەرەتا پەیوەندی بە کەناڵەکەوە بکە، "
                 "پاشان /start بنێرە."
             )
 
             if CHANNEL_URL:
-                send(
-                    chat_id,
-                    msg,
-                    {
-                        "inline_keyboard": [[
-                            {
-                                "text": "📢 چوونە ناو کەناڵ",
-                                "url": CHANNEL_URL
-                            }
-                        ]]
-                    }
-                )
+                send(chat_id, msg, {
+                    "inline_keyboard": [[
+                        {"text": "📢 چوونە ناو کەناڵ", "url": CHANNEL_URL}
+                    ]]
+                })
             else:
                 send(chat_id, msg)
-
             return
 
-        send(
-            chat_id,
-            "بەخێربێیت بۆ ALONE ⚡",
-            start_keyboard()
-        )
+        send(chat_id, "بەخێربێیت بۆ ALONE ⚡", start_keyboard())
         return
 
     if text == "/help":
@@ -524,133 +564,118 @@ def command(update):
         return
 
     if text == "/balance":
-        row = get_user(uid)
-        send(
-            chat_id,
-            f"💳 باڵانسی تۆ: {row['credits']} Credit"
-        )
-        return
-
-    if not is_owner(uid):
-        send(
-            chat_id,
-            "ئەم فەرمانە تەنها بۆ خاوەنەکانە."
-        )
+        if is_privileged(uid):
+            send(chat_id, "💳 باڵانسی تۆ: ♾️ بێسنوور")
+        else:
+            row = get_user(uid)
+            send(chat_id, f"💳 باڵانسی تۆ: {row['credits']} Credit")
         return
 
     parts = text.split(maxsplit=2)
-
     if not parts:
         return
 
     cmd = parts[0].split("@")[0].lower()
 
+    if cmd not in {
+        "/panel", "/stats", "/addcredit", "/removecredit",
+        "/ban", "/unban", "/dm", "/broadcast", "/history"
+    }:
+        return
+
+    if not is_privileged(uid):
+        send(chat_id, "⛔ ئەم فەرمانە تەنها بۆ بەڕێوەبەرانە.")
+        return
+
     try:
-
         if cmd == "/panel":
-
             send(
                 chat_id,
-                "👑 کۆنترۆڵی ALONE",
+                f"👑 ALONE Control Panel\nRole: {role_name(uid)}",
                 panel_keyboard()
             )
 
         elif cmd == "/stats":
-
             send(chat_id, stats_text())
 
         elif cmd in ("/addcredit", "/removecredit"):
-
             if len(parts) < 3:
-                raise ValueError(
-                    "Use /addcredit USER_ID AMOUNT"
-                )
+                raise ValueError(f"Use {cmd} USER_ID AMOUNT")
 
             target = int(parts[1])
             amount = int(parts[2])
 
+            if amount <= 0:
+                raise ValueError("Amount must be positive")
+
+            if not can_manage_user(uid, target):
+                raise PermissionError(
+                    "ناتوانیت کرێدیتی ئەم هەژمارە بگۆڕیت."
+                )
+
             if cmd == "/removecredit":
                 amount = -amount
 
-            value = credit_change(
-                uid,
-                target,
-                amount,
-                cmd
-            )
+            value = credit_change(uid, target, amount, cmd)
 
-            send(
-                chat_id,
-                f"✅ نوێکرایەوە. باڵانسی {target}: {value}"
-            )
+            send(chat_id, f"✅ کرێدیت نوێکرایەوە.\nباڵانس: {value}")
+            send(target, f"💳 باڵانسی نوێی تۆ: {value}")
 
-            send(
-                target,
-                f"💳 باڵانسی ئێستا: {value}"
-            )
-
-        elif cmd == "/ban" and len(parts) >= 3:
+        elif cmd == "/ban":
+            if len(parts) < 3:
+                raise ValueError("Use /ban USER_ID 30m|2h|3d|forever")
 
             target = int(parts[1])
             until = parse_duration(parts[2])
 
-            with db() as conn:
-                conn.execute("""
-                    UPDATE users
-                    SET banned_until=%s
-                    WHERE user_id=%s
-                """, (until, target))
-
+            set_ban(uid, target, until)
             send(chat_id, f"🚫 بەکارهێنەری {target} باندکرا.")
 
-        elif cmd == "/unban" and len(parts) >= 2:
+            send(target, "🚫 هەژمارەکەت باندکراوە.")
+
+        elif cmd == "/unban":
+            if len(parts) < 2:
+                raise ValueError("Use /unban USER_ID")
 
             target = int(parts[1])
-
-            with db() as conn:
-                conn.execute("""
-                    UPDATE users
-                    SET banned_until=NULL
-                    WHERE user_id=%s
-                """, (target,))
+            remove_ban(uid, target)
 
             send(chat_id, f"✅ باندی {target} لابرا.")
+            send(target, "✅ باندەکەت لابرا.")
 
-        elif cmd == "/dm" and len(parts) >= 3:
+        elif cmd == "/dm":
+            if len(parts) < 3:
+                raise ValueError("Use /dm USER_ID MESSAGE")
 
             target = int(parts[1])
-
             result = send(target, parts[2])
 
             send(
                 chat_id,
                 "✅ نامەکە نێردرا."
                 if result.get("ok")
-                else "❌ ناردنی نامەکە سەرکەوتوو نەبوو."
+                else "❌ ناردن سەرکەوتوو نەبوو."
             )
 
-        elif cmd == "/broadcast" and len(parts) >= 2:
+        elif cmd == "/broadcast":
+            if len(parts) < 2:
+                raise ValueError("Use /broadcast MESSAGE")
 
             message_text = text.split(maxsplit=1)[1]
-
-            sent, failed = broadcast(
-                uid,
-                message_text
-            )
+            sent, failed = broadcast(uid, message_text)
 
             send(
                 chat_id,
-                f"📣 تەواو بوو.\n"
-                f"✅ نێردرا: {sent}\n"
-                f"❌ سەرکەوتوو نەبوو: {failed}"
+                f"📣 تەواو بوو.\n✅ نێردرا: {sent}\n❌ نەچوو: {failed}"
             )
 
-        elif cmd == "/history" and len(parts) >= 2:
+        elif cmd == "/history":
+            if len(parts) < 2:
+                raise ValueError("Use /history USER_ID")
 
             target = int(parts[1])
 
             with db() as conn:
-
                 rows = conn.execute("""
                     SELECT amount, reason, created_at
                     FROM transactions
@@ -660,210 +685,148 @@ def command(update):
                 """, (target,)).fetchall()
 
             if not rows:
-                send(
-                    chat_id,
-                    "هیچ مامەڵەیەک نەدۆزرایەوە."
-                )
+                send(chat_id, "هیچ مامەڵەیەک نەدۆزرایەوە.")
             else:
                 lines = [
                     f"{r['created_at']:%Y-%m-%d %H:%M} | "
                     f"{r['amount']:+} | {r['reason']}"
                     for r in rows
                 ]
+                send(chat_id, "🧾 دوا مامەڵەکان:\n" + "\n".join(lines))
 
-                send(
-                    chat_id,
-                    "🧾 دوا مامەڵەکان:\n"
-                    + "\n".join(lines)
-                )
-
-        else:
-            send(chat_id, help_text())
-
-    except (ValueError, TypeError, KeyError) as exc:
-
-        send(chat_id, f"⚠️ هەڵە: {exc}")
+    except (ValueError, TypeError, KeyError, PermissionError) as exc:
+        send(chat_id, f"⚠️ {exc}")
 
     except Exception:
-
         log.exception("Command processing error")
-
-        send(
-            chat_id,
-            "⚠️ هەڵەیەک ڕوویدا. تکایە دواتر هەوڵ بدەرەوە."
-        )
+        send(chat_id, "⚠️ هەڵەیەک ڕوویدا. دواتر هەوڵ بدەرەوە.")
 
 
-# ================= BUTTON CALLBACKS =================
+# ================= CALLBACKS =================
 
 def callback(update):
-
     cb = update.get("callback_query", {})
-
     callback_id = cb.get("id")
 
     if not callback_id:
         return
 
-    # Answer immediately to stop Telegram loading indicator.
-    answer_callback(callback_id)
-
     user = cb.get("from", {})
     uid = user.get("id")
-
     message = cb.get("message") or {}
     chat_id = (message.get("chat") or {}).get("id")
-
     data = cb.get("data", "")
+
+    # Answer exactly once, immediately.
+    answer_callback(callback_id)
 
     if not uid or chat_id is None:
         return
 
     try:
-
         register_user(user)
 
         if blocked(uid):
-            answer_callback(
-                callback_id,
-                "هەژمارەکەت باندکراوە."
-            )
+            send(chat_id, "🚫 هەژمارەکەت باندکراوە.")
             return
 
         if data == "balance":
-
-            row = get_user(uid)
-
-            send(
-                chat_id,
-                f"💳 باڵانسی تۆ: {row['credits']} Credit"
-            )
+            if is_privileged(uid):
+                send(chat_id, "💳 باڵانسی تۆ: ♾️ بێسنوور")
+            else:
+                row = get_user(uid)
+                send(chat_id, f"💳 باڵانسی تۆ: {row['credits']} Credit")
 
         elif data == "help":
-
             send(chat_id, help_text())
 
-        elif data == "stats" and is_owner(uid):
+        elif data in ("stats", "users", "transactions"):
+            if not is_privileged(uid):
+                send(chat_id, "⛔ دەسەڵاتی ئەم بەشەت نییە.")
+                return
 
-            send(chat_id, stats_text())
+            if data == "stats":
+                send(chat_id, stats_text())
 
-        elif data == "users" and is_owner(uid):
+            elif data == "users":
+                with db() as conn:
+                    rows = conn.execute("""
+                        SELECT user_id, username, credits
+                        FROM users
+                        ORDER BY created_at DESC
+                        LIMIT 15
+                    """).fetchall()
 
-            with db() as conn:
-
-                rows = conn.execute("""
-                    SELECT user_id, username, credits
-                    FROM users
-                    ORDER BY created_at DESC
-                    LIMIT 15
-                """).fetchall()
-
-            lines = [
-                f"{r['user_id']} | "
-                f"@{r['username'] or '-'} | "
-                f"{r['credits']} cr"
-                for r in rows
-            ]
-
-            send(
-                chat_id,
-                "👥 دوا بەکارهێنەران:\n"
-                + ("\n".join(lines) or "بەتاڵە")
-            )
-
-        elif data == "transactions" and is_owner(uid):
-
-            with db() as conn:
-
-                rows = conn.execute("""
-                    SELECT user_id, amount, reason
-                    FROM transactions
-                    ORDER BY id DESC
-                    LIMIT 10
-                """).fetchall()
-
-            lines = [
-                f"{r['user_id']} | "
-                f"{r['amount']:+} | {r['reason']}"
-                for r in rows
-            ]
-
-            send(
-                chat_id,
-                "🧾 دوا مامەڵەکان:\n"
-                + ("\n".join(lines) or "بەتاڵە")
-            )
-
-        elif data == "newlink":
-
-            row = get_user(uid)
-
-            if not row or row["credits"] < 1:
+                lines = [
+                    f"{r['user_id']} | @{r['username'] or '-'} | "
+                    f"{r['credits']} cr"
+                    for r in rows
+                ]
 
                 send(
                     chat_id,
-                    "❌ کرێدیتی پێویستت نییە."
+                    "👥 دوا بەکارهێنەران:\n" + ("\n".join(lines) or "بەتاڵە")
                 )
 
-            else:
+            elif data == "transactions":
+                with db() as conn:
+                    rows = conn.execute("""
+                        SELECT user_id, amount, reason
+                        FROM transactions
+                        ORDER BY id DESC
+                        LIMIT 10
+                    """).fetchall()
 
-                # Deduct credit first.
-                credit_change(
-                    0,
-                    uid,
-                    -1,
-                    "link creation"
+                lines = [
+                    f"{r['user_id']} | {r['amount']:+} | {r['reason']}"
+                    for r in rows
+                ]
+
+                send(
+                    chat_id,
+                    "🧾 دوا مامەڵەکان:\n" + ("\n".join(lines) or "بەتاڵە")
                 )
 
-                try:
-                    token = create_link(uid, DATABASE_URL)
+        elif data == "newlink":
+            if not member_ok(uid):
+                send(chat_id, "سەرەتا بچۆ ناو کەناڵەکە.")
+                return
 
-                    send(
-                        chat_id,
-                        "🔗 لینکی تایبەتت ئامادەیە:\n"
-                        f"{token}\n\n"
-                        "⏳ ماوە: ١٥ خولەک\n"
-                        "⚠️ تەنها بۆ خزمەتگوزاریی ڕوون "
-                        "و بە ڕەزامەندیی بەکارهێنەرە."
-                    )
+            if not spend_credit(uid, "link creation"):
+                send(chat_id, "❌ کرێدیتی پێویستت نییە.")
+                return
 
-                except Exception:
-                    # Refund if link creation fails.
-                    credit_change(
-                        0,
-                        uid,
-                        1,
-                        "link creation refund"
-                    )
-                    raise
+            try:
+                token = create_link(uid, DATABASE_URL)
+
+                send(
+                    chat_id,
+                    "🔗 لینکی خزمەتگوزارییەکەت ئامادەیە:\n"
+                    f"{token}\n\n"
+                    "⏳ ماوە: ١٥ خولەک\n"
+                    "⚠️ بەکارهێنانی کامێرا یان داتای ئامێر "
+                    "دەبێت بە ڕەزامەندیی ڕوونی بەکارهێنەر بێت."
+                )
+
+            except Exception:
+                if not is_privileged(uid):
+                    credit_change(0, uid, 1, "link creation refund")
+                raise
 
         else:
-
-            if not is_owner(uid):
-                answer_callback(
-                    callback_id,
-                    "ئەم دوگمەیە تەنها بۆ خاوەنەکانە."
-                )
+            send(chat_id, "⚠️ ئەم دوگمەیە نەناسراوە.")
 
     except Exception:
-
         log.exception("Callback processing error")
-
-        send(
-            chat_id,
-            "⚠️ هەڵەیەک لە دوگمەکە ڕوویدا."
-        )
+        send(chat_id, "⚠️ هەڵەیەک لە دوگمەکە ڕوویدا.")
 
 
 # ================= OFFSET STORAGE =================
 
 def get_offset():
-
     with db() as conn:
-
         row = conn.execute("""
-            SELECT value
-            FROM bot_state
+            SELECT value FROM bot_state
             WHERE key='update_offset'
         """).fetchone()
 
@@ -871,43 +834,32 @@ def get_offset():
 
 
 def save_offset(offset):
-
     with db() as conn:
-
         conn.execute("""
             INSERT INTO bot_state(key, value)
             VALUES ('update_offset', %s)
-
             ON CONFLICT(key)
             DO UPDATE SET value=EXCLUDED.value
         """, (str(offset),))
 
 
-# ================= LONG POLLING =================
+# ================= UPDATE PROCESSING =================
 
 def process_update(item):
+    if "message" in item:
+        command(item)
+    elif "callback_query" in item:
+        callback(item)
 
-    try:
 
-        if "message" in item:
-            command(item)
-
-        elif "callback_query" in item:
-            callback(item)
-
-    except Exception:
-
-        log.exception(
-            "Update processing failed: %s",
-            item.get("update_id")
-        )
-
+# ================= LONG POLLING =================
 
 def main():
+    if not OWNER_IDS:
+        raise RuntimeError("OWNER_IDS is empty. Configure Owner IDs.")
 
     init_db()
 
-    # Use polling, not webhook.
     webhook = api("deleteWebhook", {
         "drop_pending_updates": False
     })
@@ -916,61 +868,49 @@ def main():
         log.warning("Could not remove previous webhook.")
 
     offset = get_offset()
-
     start_time = time.monotonic()
 
-    log.info("ALONE long polling started.")
+    log.info(
+        "ALONE started. Owners=%s Admins=%s",
+        sorted(OWNER_IDS),
+        sorted(ADMIN_IDS)
+    )
 
     while time.monotonic() - start_time < RUN_SECONDS:
-
         try:
-
-            result = api(
-                "getUpdates",
-                {
-                    "offset": offset,
-                    "timeout": 30,
-                    "allowed_updates": [
-                        "message",
-                        "callback_query"
-                    ]
-                }
-            )
+            result = api("getUpdates", {
+                "offset": offset,
+                "timeout": 30,
+                "allowed_updates": ["message", "callback_query"]
+            })
 
             if not result.get("ok"):
-                log.warning(
-                    "getUpdates failed. Retrying in 5 seconds."
-                )
+                log.warning("getUpdates failed. Retrying in 5 seconds.")
                 time.sleep(5)
                 continue
 
             updates = result.get("result", [])
 
             for item in updates:
+                update_id = item["update_id"]
 
-                process_update(item)
+                try:
+                    process_update(item)
+                except Exception:
+                    log.exception("Update failed: %s", update_id)
 
-                offset = item["update_id"] + 1
-
+                # Save offset after processing attempt.
+                offset = update_id + 1
                 save_offset(offset)
 
             if updates:
-                log.info(
-                    "Processed %d updates.",
-                    len(updates)
-                )
+                log.info("Processed %d updates.", len(updates))
 
         except Exception:
-
             log.exception("Polling loop error")
-
             time.sleep(5)
 
-    log.info(
-        "ALONE polling period finished. "
-        "Saved offset: %s",
-        offset
-    )
+    log.info("Polling period finished. Offset=%s", offset)
 
 
 if __name__ == "__main__":
